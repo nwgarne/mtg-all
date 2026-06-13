@@ -26,7 +26,7 @@
   background: var(--ink-000);
   border: 1px solid var(--rule-medium);
   border-radius: 2px;
-  padding: 0.5rem 0.7rem;
+  padding: 0.5rem 1.9rem 0.5rem 0.7rem;   /* right room for the clear button */
   outline: none;
   appearance: none;
   -webkit-appearance: none;
@@ -40,6 +40,34 @@
 /* Drop the native search clear/decoration so it reads as one editorial field. */
 .mtg-search__input::-webkit-search-decoration,
 .mtg-search__input::-webkit-search-cancel-button { -webkit-appearance: none; }
+
+/* Custom clear (x): shown by search.js whenever the field has text. */
+.mtg-search__clear {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  display: none;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 3px;
+  color: var(--bone-500);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.12s ease, background-color 0.12s ease;
+}
+.mtg-search__clear.is-visible { display: grid; }
+.mtg-search__clear:hover { color: var(--bone-900); background: var(--ink-150); }
+.mtg-search__clear:focus-visible {
+  outline: 1px solid var(--accent-rail);
+  outline-offset: 1px;
+  color: var(--bone-900);
+}
 
 /* --- Autocomplete menu --- */
 .mtg-search__menu {

@@ -317,6 +317,25 @@
     var active = -1;     // highlighted index
     var token = 0;       // guards out-of-order autocomplete responses
 
+    // Clear (x) button: wipe the field between searches without backspacing.
+    var clearBtn = el('button', 'mtg-search__clear', '×');
+    clearBtn.setAttribute('type', 'button');
+    clearBtn.setAttribute('aria-label', 'Clear search');
+    input.parentNode.appendChild(clearBtn);
+    function updateClear() {
+      if (input.value.length) clearBtn.classList.add('is-visible');
+      else clearBtn.classList.remove('is-visible');
+    }
+    // mousedown + preventDefault so the input keeps focus (no blur race).
+    clearBtn.addEventListener('mousedown', function (ev) {
+      ev.preventDefault();
+      input.value = '';
+      token++;                 // drop any in-flight autocomplete response
+      hideMenu();
+      updateClear();
+      input.focus();
+    });
+
     function hideMenu() {
       menu.classList.remove('is-open');
       menu.setAttribute('aria-hidden', 'true');
@@ -356,6 +375,7 @@
     }
     function choose(name) {
       input.value = name;
+      updateClear();
       hideMenu();
       openResults(name, input);
     }
@@ -370,6 +390,7 @@
     }, 180);
 
     input.addEventListener('input', function () {
+      updateClear();
       var term = input.value.trim();
       if (term.length < 2) { token++; hideMenu(); return; }
       run(term);
