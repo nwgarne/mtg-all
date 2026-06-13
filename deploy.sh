@@ -24,7 +24,7 @@ fi
 
 # 2. assemble build/ from source (no data yet)
 rm -rf "$BUILD"; mkdir -p "$BUILD/scripts" "$BUILD/styles"
-cp "$ROOT/index.html" "$ROOT/favicon.ico" "$ROOT/favicon-16.png" "$ROOT/favicon-32.png" "$ROOT/apple-touch-icon.png" "$ROOT/og-image.jpg" "$BUILD/"
+cp "$ROOT/index.html" "$ROOT/404.html" "$ROOT/favicon.ico" "$ROOT/favicon-16.png" "$ROOT/favicon-32.png" "$ROOT/apple-touch-icon.png" "$ROOT/og-image.jpg" "$BUILD/"
 cp "$ROOT/scripts/"*.js "$BUILD/scripts/"
 cp "$ROOT/styles/"*.css "$BUILD/styles/"
 

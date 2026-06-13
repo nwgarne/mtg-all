@@ -102,6 +102,30 @@
     transition: background var(--dur-fast) var(--ease-out-quart);
   }
 
+  /* TOP SCRIM - a second gradient anchored to the top edge so the
+     counts rail stays legible over bright art (some 2025/2026 title
+     cards measured ~1.85-2.66:1 without it). Sits above the art but
+     below the text (z-index -1, same plane as ::before, painted
+     after it). Fades to transparent by the time it clears the
+     counts band so the art still breathes through the middle. */
+  .year-card::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 42%;
+    z-index: -1;
+    pointer-events: none;
+    background:
+      linear-gradient(to bottom,
+        oklch(8% 0.010 95 / 0.82) 0%,
+        oklch(9% 0.010 95 / 0.52) 38%,
+        oklch(11% 0.010 95 / 0.18) 74%,
+        transparent 100%);
+    transition: background var(--dur-fast) var(--ease-out-quart);
+  }
+
   .year-card:hover,
   .year-card:focus-visible {
     border-color: var(--accent);
@@ -149,8 +173,10 @@
     font-size: var(--fs-label);
     letter-spacing: var(--tracking-wider);
     text-transform: uppercase;
-    color: var(--bone-800);
-    text-shadow: 0 1px 6px oklch(0% 0 0 / 0.8);
+    color: var(--bone-900);
+    text-shadow:
+      0 1px 2px oklch(0% 0 0 / 0.9),
+      0 0 10px oklch(0% 0 0 / 0.7);
   }
   .year-card__counts .sep {
     color: var(--accent);

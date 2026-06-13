@@ -14,13 +14,23 @@
   /* ============================================================
      HERO STATS - the bracket badge row under the hero
      ============================================================ */
+  /* Fixed 3-up. The year hero feeds exactly three stats (Cards /
+     Sets / Nonfoil value), so an even three-column grid fills the
+     full width with no orphan cell. The old auto-fit packed the
+     cells left at a 140px min and left a dead right zone on desktop
+     (and a stranded 4th cell in the 2x2 on phones). */
   .stat-row {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    grid-template-columns: repeat(3, 1fr);
     gap: 1px;
     margin: var(--space-lg) 0 0;
     background: var(--rule-medium);
     border: 1px solid var(--rule-medium);
+  }
+  /* Phones: stack to a single even column so the three cells stay
+     full-width with no empty grid slot. */
+  @media (max-width: 560px) {
+    .stat-row { grid-template-columns: 1fr; }
   }
 
   .stat-row__cell {

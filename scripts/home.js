@@ -80,6 +80,11 @@
 
     const title = y.title || null;
     const topName = title && title.name ? title.name : '';
+    // Double-faced cards arrive as "Front // Back". The caption only
+    // has room for one line, and a truncated back half reads as broken
+    // ("Tamiyo, Inquisitive Student // Tamiyo, S..."), so show just the
+    // front face. The full name still rides in the title + aria-label.
+    const topNameFront = topName.split(' // ')[0];
     const yearLabel = (title ? 'View ' + y.year + ', top card ' + topName : 'View ' + y.year)
       + ', ' + pluralCards(y.cards) + ', ' + pluralSets(y.sets);
     card.setAttribute('aria-label', yearLabel);
@@ -110,7 +115,7 @@
     if (title && topName) {
       const top = el('div', 'year-card__top');
       top.appendChild(el('span', 'year-card__top-lbl', 'Top:'));
-      const nameEl = el('span', 'year-card__top-name', topName);
+      const nameEl = el('span', 'year-card__top-name', topNameFront);
       nameEl.setAttribute('title', topName);
       top.appendChild(nameEl);
       const whole = priceWhole(title.value);

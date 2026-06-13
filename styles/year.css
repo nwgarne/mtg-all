@@ -78,7 +78,9 @@
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='none' stroke='%23bda36a' stroke-width='1.5' d='M1 1l4 4 4-4'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: right var(--space-sm) center;
-    border: 1px solid var(--rule-medium);
+    /* Resting border raised to --accent-rail (>=3:1) for WCAG 1.4.11 non-text
+       contrast; was --rule-medium (~1.62:1). The Sort select reuses this. */
+    border: 1px solid var(--accent-rail, var(--rule-strong));
     border-radius: var(--r-sm);
     color: var(--bone-900);
     font-family: var(--font-body, inherit);
@@ -90,7 +92,7 @@
       background-color var(--dur-fast) var(--ease-out-quart);
   }
   .year-controls__select:hover {
-    border-color: var(--rule-strong);
+    border-color: var(--accent);
     background-color: var(--ink-150);
   }
   .year-controls__select:focus-visible {
@@ -136,6 +138,31 @@
      grid itself is defined in card-tile.css. */
   #year-grid .deck-cat__body {
     align-content: start;
+  }
+
+  /* The category head is wrapped in an <h3> for the document outline +
+     heading navigation (a11y). The heading must NOT form a box, or the
+     sticky head would only stick within the (short) heading box instead of
+     the whole .deck-cat - display:contents removes the heading from the box
+     tree while keeping its semantics, so the head stays a flow child of
+     .deck-cat and its position:sticky keeps working through the body scroll. */
+  #year-grid .deck-cat__heading {
+    display: contents;
+  }
+
+  /* Chunked-render loading note (perf). Shown inside an opening category's
+     body while ~100 tiles/frame mount; year.js clears it when the last
+     chunk lands. Spans the whole tile grid so it reads as one line. */
+  #year-grid .deck-cat__loading {
+    grid-column: 1 / -1;
+    margin: 0;
+    padding: var(--space-sm) var(--space-xs);
+    font-family: var(--font-mono);
+    font-size: var(--fs-label);
+    letter-spacing: var(--tracking-wider);
+    text-transform: uppercase;
+    color: var(--bone-700);
+    text-align: center;
   }
 
 
@@ -240,10 +267,91 @@
 
 
   /* ============================================================
+     SCOPE READOUT - compact breadcrumb (the SCOPE view's hero)
+     ------------------------------------------------------------
+     Stands in for the big YEAR hero while a scope is active so the
+     readout reflects the SCOPE, not the year (e.g. "2024 > Foundations
+     · 730 cards"). Built by year.js; rebuilt with the toolbar so the
+     count/value track the live rarity filter. The picker view keeps the
+     full year hero. No em dashes (">" segments, "·" stat dot).
+     ============================================================ */
+  .year-scopebar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-2xs) var(--space-md);
+    margin-top: var(--space-md);
+    padding: var(--space-xs) 0 var(--space-sm);
+    border-bottom: 1px solid var(--rule-soft);
+  }
+  .year-scopebar__crumb {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: var(--space-2xs);
+    min-width: 0;
+    font-family: var(--font-display, var(--font-headline));
+    font-weight: var(--fw-display-bold, 700);
+    font-size: var(--fs-h2);
+    line-height: var(--lh-snug, 1.2);
+    letter-spacing: var(--tracking-tight);
+    text-transform: uppercase;
+    color: var(--bone-900);
+  }
+  .year-scopebar__year {
+    color: var(--bone-700);
+    text-decoration: none;
+    transition: color var(--dur-fast) var(--ease-out-quart);
+  }
+  .year-scopebar__year:hover,
+  .year-scopebar__year:focus-visible {
+    color: var(--accent);
+    outline: none;
+  }
+  .year-scopebar__year:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+    border-radius: var(--r-xs);
+  }
+  .year-scopebar__sep {
+    color: var(--accent);
+    font-weight: var(--fw-display-regular, 400);
+  }
+  .year-scopebar__name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+  }
+  .year-scopebar__stats {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--space-2xs);
+    flex: 0 0 auto;
+    font-family: var(--font-mono);
+    font-size: var(--fs-meta);
+    letter-spacing: var(--tracking-wide);
+    text-transform: uppercase;
+    color: var(--bone-700);
+    white-space: nowrap;
+  }
+  .year-scopebar__stats strong {
+    color: var(--bone-900);
+    font-weight: var(--fw-body-strong, 500);
+    font-variant-numeric: tabular-nums;
+  }
+  .year-scopebar__sep-dot { color: var(--bone-300); }
+  .year-scopebar__value { color: var(--accent); }
+
+
+  /* ============================================================
      SCOPE TOOLBAR - sticky, pinned under the top header on scroll
      ------------------------------------------------------------
      Row 1: "← Sets" + scope label + Sort select.
-     Row 2: type jump-pills (horizontally scrollable on mobile).
+     Row 2: rarity filter chips.
+     Row 3: type jump-pills (horizontally scrollable on mobile).
      Parks at top:var(--mtg-topbar-h) so it tiles directly beneath
      the sticky .mtg-topbar; z just under the header so the header's
      blur reads over it. The accordion headers stick below BOTH.
@@ -344,7 +452,58 @@
     min-width: 11rem;
   }
 
-  /* Row 2: the type jump-pills, horizontally scrollable on narrow
+  /* Row 2: RARITY filter chips. A run of toggle buttons (All / Common /
+     Uncommon / Rare / Mythic); the pressed one carries .is-active. Scrolls
+     horizontally on narrow screens like the pills row. */
+  .year-toolbar__rarity {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2xs);
+    margin-top: var(--space-2xs);
+    padding-top: var(--space-2xs);
+    border-top: 1px solid var(--rule-medium);
+  }
+  .year-rarity {
+    display: inline-flex;
+    align-items: center;
+    padding: var(--space-3xs, 0.3rem) var(--space-xs);
+    background: var(--ink-050);
+    /* >=3:1 resting border (--accent-rail) for WCAG 1.4.11 non-text contrast. */
+    border: 1px solid var(--accent-rail, var(--rule-strong));
+    border-radius: var(--r-pill, 999px);
+    color: var(--bone-800);
+    font-family: var(--font-mono);
+    font-size: var(--fs-label);
+    letter-spacing: var(--tracking-wide);
+    text-transform: uppercase;
+    cursor: pointer;
+    white-space: nowrap;
+    transition:
+      border-color var(--dur-fast) var(--ease-out-quart),
+      background-color var(--dur-fast) var(--ease-out-quart),
+      color var(--dur-fast) var(--ease-out-quart);
+  }
+  .year-rarity:hover {
+    border-color: var(--accent);
+    background: var(--ink-150);
+    color: var(--bone-900);
+  }
+  .year-rarity:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-color: var(--accent);
+  }
+  /* The selected rarity: gold-tint fill so the current filter reads at a
+     glance, matching the active jump-pill treatment. */
+  .year-rarity.is-active {
+    background: var(--accent-wash);
+    border-color: var(--accent);
+    color: var(--accent-bright, var(--accent));
+    font-weight: var(--fw-body-strong, 500);
+  }
+
+  /* Row 3: the type jump-pills, horizontally scrollable on narrow
      screens so a scope with many types never wraps into a wall. */
   .year-toolbar__pills {
     display: flex;
@@ -360,7 +519,9 @@
     gap: var(--space-3xs, 0.3rem);
     padding: var(--space-3xs, 0.3rem) var(--space-2xs);
     background: var(--ink-050);
-    border: 1px solid var(--rule-medium);
+    /* Resting border raised to --accent-rail (>=3:1) for WCAG 1.4.11
+       non-text contrast; was --rule-medium (~1.62:1). */
+    border: 1px solid var(--accent-rail, var(--rule-strong));
     border-radius: 999px;
     color: var(--bone-800);
     font-family: var(--font-mono);
@@ -374,17 +535,34 @@
       background-color var(--dur-fast) var(--ease-out-quart),
       color var(--dur-fast) var(--ease-out-quart);
   }
-  .year-pill:hover,
-  .year-pill:focus-visible {
+  .year-pill:hover {
     border-color: var(--accent);
     background: var(--ink-150);
     color: var(--bone-900);
-    outline: none;
   }
+  /* Distinct focus ring: a 2px outline with offset, not just a 1px gold
+     border that reads the same as hover (Item 12). */
+  .year-pill:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-color: var(--accent);
+  }
+  /* The OPEN category's pill: gold-tint fill + stronger border so the
+     current section is obvious at a glance (Item 4). aria-current="true"
+     is set in tandem by year.js. */
+  .year-pill.is-active {
+    background: var(--accent-wash);
+    border-color: var(--accent);
+    color: var(--bone-900);
+    font-weight: var(--fw-body-strong, 500);
+    box-shadow: inset 0 0 0 1px var(--accent-soft);
+  }
+  .year-pill.is-active .year-pill__name { color: var(--accent-bright, var(--accent)); }
   .year-pill__n {
     color: var(--accent);
     font-variant-numeric: tabular-nums;
   }
+  .year-pill.is-active .year-pill__n { color: var(--accent-bright, var(--accent)); }
 
 
   /* ============================================================
@@ -513,26 +691,62 @@
     .year-toolbar__row {
       gap: var(--space-2xs);
     }
+    /* Item 7: keep the scope label on the SAME row as the "Sets" back
+       control (it truncates with ellipsis) instead of forcing it to its
+       own full-width row, dropping ~40-50px off the sticky stack. */
     .year-toolbar__label {
-      flex-basis: 100%;
-      order: -1;
+      flex: 1 1 6rem;
+      min-width: 0;
+      order: 0;
       font-size: var(--fs-meta);
     }
     .year-toolbar__sort {
-      flex: 1 1 auto;
+      flex: 0 0 auto;
     }
+    /* Drop the "Sort" prefix on phones (the select's value is self-explanatory)
+       so back + label + sort share ONE row, trimming the sticky stack. */
+    .year-toolbar__sort-lbl { display: none; }
+    /* Item 6: WCAG 2.5.5 / touch-friendly - 44px min-height on the toolbar
+       controls + the accordion head, with vertical padding. */
     .year-toolbar__sort .year-controls__select {
-      flex: 1 1 auto;
+      /* Fixed width so the long option text ("Price (high to low)") cannot grow
+         the control and wrap the Sort onto a second row; the value clips with the
+         native ellipsis, the full options still show when opened. */
+      width: 8.5rem;
       min-width: 0;
-      width: 100%;
+      max-width: 8.5rem;
+      min-height: 44px;
+      padding-top: var(--space-2xs);
+      padding-bottom: var(--space-2xs);
     }
-    /* Pills scroll horizontally instead of wrapping into a wall. */
+    .year-toolbar__back,
+    .year-pill,
+    .year-rarity {
+      min-height: 44px;
+      padding-top: var(--space-2xs);
+      padding-bottom: var(--space-2xs);
+    }
+    #year-grid .deck-cat__head {
+      min-height: 44px;
+      padding-top: var(--space-2xs);
+      padding-bottom: var(--space-2xs);
+    }
+    /* Rarity chips + pills scroll horizontally instead of wrapping a wall,
+       with tighter row separation on phones to keep the sticky stack compact. */
+    .year-toolbar__rarity,
     .year-toolbar__pills {
       flex-wrap: nowrap;
       overflow-x: auto;
       -webkit-overflow-scrolling: touch;
       scrollbar-width: thin;
+      margin-top: var(--space-3xs);
+      padding-top: var(--space-3xs);
     }
-    .year-pill { flex: 0 0 auto; }
+    .year-pill,
+    .year-rarity { flex: 0 0 auto; }
+
+    /* The compact scope breadcrumb shrinks to fit the phone. */
+    .year-scopebar__crumb { font-size: var(--fs-h3); }
+    .year-scopebar__stats { font-size: var(--fs-caption); }
   }
 }

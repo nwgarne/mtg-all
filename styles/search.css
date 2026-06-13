@@ -24,9 +24,11 @@
   letter-spacing: var(--tracking-wide);
   color: var(--bone-800);
   background: var(--ink-000);
-  border: 1px solid var(--rule-medium);
+  /* Resting border at --accent-rail (>=3:1 vs ink) so the field meets WCAG 1.4.11;
+     focus still reads distinctly via the added gold ring (box-shadow) below. */
+  border: 1px solid var(--accent-rail);
   border-radius: 2px;
-  padding: 0.5rem 1.9rem 0.5rem 0.7rem;   /* right room for the clear button */
+  padding: 0.5rem 2.4rem 0.5rem 0.7rem;   /* right room for the 36px clear button */
   outline: none;
   appearance: none;
   -webkit-appearance: none;
@@ -41,20 +43,25 @@
 .mtg-search__input::-webkit-search-decoration,
 .mtg-search__input::-webkit-search-cancel-button { -webkit-appearance: none; }
 
-/* Custom clear (x): shown by search.js whenever the field has text. */
+/* Custom clear (x): shown by search.js whenever the field has text.
+   The whole 36x36 padding-box is clickable (comfortable target for mouse, touch
+   and keyboard focus), while the hover fill is clipped to the smaller content box
+   via background-clip so the visible chrome stays compact and tasteful. */
 .mtg-search__clear {
   position: absolute;
   top: 50%;
-  right: 6px;
+  right: 2px;
   transform: translateY(-50%);
   display: none;
   place-items: center;
-  width: 22px;
-  height: 22px;
-  padding: 0;
+  box-sizing: border-box;
+  width: 36px;
+  height: 36px;
+  padding: 7px;
   background: transparent;
+  background-clip: content-box;
   border: 0;
-  border-radius: 3px;
+  border-radius: 9px;
   color: var(--bone-500);
   font-size: 1.1rem;
   line-height: 1;
@@ -65,7 +72,7 @@
 .mtg-search__clear:hover { color: var(--bone-900); background: var(--ink-150); }
 .mtg-search__clear:focus-visible {
   outline: 1px solid var(--accent-rail);
-  outline-offset: 1px;
+  outline-offset: -6px;
   color: var(--bone-900);
 }
 
@@ -75,12 +82,15 @@
   top: calc(100% + 6px);
   right: 0;
   left: auto;
+  /* At least the full width of the field; can grow a little wider for long card
+     names but never past the viewport. */
   min-width: 100%;
-  max-width: min(380px, 92vw);
+  max-width: min(420px, 92vw);
   max-height: 60vh;
   overflow-y: auto;
   background: var(--ink-100);
-  border: 1px solid var(--rule-strong);
+  /* Border at --accent-rail so the popup edge clears WCAG 1.4.11 (>=3:1). */
+  border: 1px solid var(--accent-rail);
   border-radius: 3px;
   box-shadow: 0 16px 40px oklch(0% 0 0 / 0.5);
   z-index: calc(var(--z-overlay) + 5);
@@ -88,7 +98,9 @@
 }
 .mtg-search__menu.is-open { display: block; }
 .mtg-search__opt {
-  display: block;
+  display: flex;
+  align-items: center;
+  min-height: 40px;            /* roomier rows than the old ~28px */
   width: 100%;
   text-align: left;
   background: transparent;
@@ -98,7 +110,7 @@
   font-family: var(--font-body);
   font-size: var(--fs-body-sm);
   line-height: 1.3;
-  padding: 0.55rem 0.75rem;
+  padding: 0.6rem 0.85rem;
   cursor: pointer;
   transition: background-color 0.1s ease, color 0.1s ease;
 }
@@ -107,6 +119,17 @@
 .mtg-search__opt.is-active {
   background: var(--accent-wash);
   color: var(--bone-900);
+}
+/* Non-interactive "no results" row: muted + italic, no hover, not an option. */
+.mtg-search__msg {
+  display: block;
+  width: 100%;
+  padding: 0.6rem 0.85rem;
+  color: var(--bone-500);
+  font-family: var(--font-body);
+  font-size: var(--fs-meta);
+  font-style: italic;
+  line-height: 1.3;
 }
 
 /* --- Results overlay --- */
@@ -205,6 +228,12 @@ html.mtg-find-lock { overflow: hidden; }
     gap: var(--space-2xs);
   }
   .mtg-find__body { padding: var(--space-sm); }
+  /* Comfortable >=44px touch target for the overlay close on phones. */
+  .mtg-find__close {
+    width: 44px;
+    height: 44px;
+    font-size: 1.6rem;
+  }
 }
 @media (max-width: 560px) {
   .mtg-search { flex-basis: 200px; }

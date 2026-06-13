@@ -38,6 +38,35 @@
     };
   }
 
+  // ---- focus trap (modal dialogs) ----
+  // Returns the tabbable elements inside a container, in DOM order. We keep the
+  // selector simple because our dialogs only ever hold buttons, links and images.
+  var FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), ' +
+    'select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+  function focusables(container) {
+    var all = container.querySelectorAll(FOCUSABLE);
+    var out = [];
+    for (var i = 0; i < all.length; i++) {
+      var n = all[i];
+      // Skip anything hidden (display:none collapses offsetParent to null).
+      if (n.offsetParent !== null || n === document.activeElement) out.push(n);
+    }
+    return out;
+  }
+  // Keep Tab / Shift+Tab inside the open dialog: wrap last->first and first->last.
+  function trapTab(container, ev) {
+    if (ev.key !== 'Tab') return;
+    var f = focusables(container);
+    if (!f.length) { ev.preventDefault(); return; }
+    var first = f[0], last = f[f.length - 1];
+    var act = document.activeElement;
+    if (ev.shiftKey) {
+      if (act === first || !container.contains(act)) { ev.preventDefault(); try { last.focus(); } catch (e) {} }
+    } else {
+      if (act === last || !container.contains(act)) { ev.preventDefault(); try { first.focus(); } catch (e) {} }
+    }
+  }
+
   // ---- Scryfall fetch ----
   // Each request is its own fetch; autocomplete is debounced upstream so we stay
   // well within Scryfall's rate guidance. A monotonically increasing token guards
@@ -117,6 +146,8 @@
     lb.appendChild(close);
     lb.addEventListener('click', function (ev) { if (ev.target === lb) closeLightbox(); });
     close.addEventListener('click', closeLightbox);
+    // Trap Tab within the zoom while it is open (it rides above the overlay).
+    lb.addEventListener('keydown', function (ev) { if (_lbOpen) trapTab(lb, ev); });
     document.body.appendChild(lb);
     _lb = lb;
     return lb;
@@ -157,8 +188,9 @@
   //  PRINTING TILE (reuses .card-tile; SET NAME is the headline)
   // ============================================================
   function printingTile(c) {
+    // A gallery of tiles, not a table: no role=row/cell (there is no grid/table
+    // ancestor, so those roles are orphaned and only confuse assistive tech).
     var row = el('div', 'card-tile');
-    row.setAttribute('role', 'row');
     row.setAttribute('data-card', c.n);
 
     var imgWrap = el('button', 'card-tile__image');
@@ -189,10 +221,8 @@
     }
     // Headline = the set name (the answer to "which sets"); sub = year, code, number, rarity.
     var nameCell = el('div', 'card-tile__name', c.setName || (c.s ? c.s.toUpperCase() : '-'));
-    nameCell.setAttribute('role', 'cell');
     meta.appendChild(nameCell);
     var sub = el('div', 'card-tile__sub');
-    sub.setAttribute('role', 'cell');
     var parts = [];
     if (c.year) parts.push(c.year);
     if (c.s) parts.push(c.s.toUpperCase());
@@ -207,14 +237,18 @@
     row.appendChild(meta);
 
     var price = el('div', 'card-tile__price');
-    price.setAttribute('role', 'cell');
     price.appendChild(el('span', 'lbl', 'TCG'));
-    var pStr = fmtPrice(c.p), pfStr = fmtPrice(c.pf), txt;
-    if (pStr && pfStr) txt = pStr + ' · foil ' + pfStr;
-    else if (pStr) txt = pStr;
-    else if (pfStr) txt = 'foil ' + pfStr;
-    else txt = '-';
-    price.appendChild(document.createTextNode(txt));
+    var pStr = fmtPrice(c.p), pfStr = fmtPrice(c.pf);
+    // USD prominent; foil is a quieter secondary on its own line.
+    if (pStr) {
+      price.appendChild(document.createTextNode(pStr));
+      if (pfStr) price.appendChild(el('span', 'card-tile__foil', 'foil ' + pfStr));
+    } else if (pfStr) {
+      price.appendChild(document.createTextNode(pfStr));
+      price.appendChild(el('span', 'card-tile__foil', 'foil only'));
+    } else {
+      price.appendChild(document.createTextNode('-'));
+    }
     row.appendChild(price);
 
     return row;
@@ -255,6 +289,9 @@
 
     ov.appendChild(panel);
     ov.addEventListener('click', function (ev) { if (ev.target === ov) closeResults(); });
+    // Trap Tab within the results overlay while it is open. When the zoom is up it
+    // has its own trap (and focus lives there), so stand down to avoid fighting it.
+    ov.addEventListener('keydown', function (ev) { if (_overlayOpen && !_lbOpen) trapTab(ov, ev); });
     document.body.appendChild(ov);
     _overlay = ov;
     return ov;
@@ -322,10 +359,23 @@
   //  AUTOCOMPLETE MENU
   // ============================================================
   function wire(input) {
+    // Unique id base so the listbox + its options can be referenced by ARIA
+    // (aria-controls / aria-activedescendant) even if more than one search ever
+    // mounts on a page.
+    var uid = 'mtg-search-' + (++wire._seq);
+    var menuId = uid + '-menu';
+
     var menu = el('div', 'mtg-search__menu');
+    menu.id = menuId;
     menu.setAttribute('role', 'listbox');
     menu.setAttribute('aria-hidden', 'true');
     input.parentNode.appendChild(menu);
+
+    // WAI-ARIA APG: combobox-with-listbox. The input owns the popup; options stay
+    // out of the tab order and are tracked via aria-activedescendant (set below).
+    input.setAttribute('role', 'combobox');
+    input.setAttribute('aria-controls', menuId);
+    input.setAttribute('aria-expanded', 'false');
 
     var names = [];      // current suggestions
     var active = -1;     // highlighted index
@@ -340,15 +390,21 @@
       if (input.value.length) clearBtn.classList.add('is-visible');
       else clearBtn.classList.remove('is-visible');
     }
-    // mousedown + preventDefault so the input keeps focus (no blur race).
-    clearBtn.addEventListener('mousedown', function (ev) {
-      ev.preventDefault();
+    // The clear action runs on CLICK, which fires for mouse, touch, AND keyboard
+    // (Enter/Space on a focused button). Wiring it to mousedown alone (the old bug)
+    // left it keyboard-inoperable, since Enter/Space never emit mousedown (WCAG 2.1.1).
+    function doClear() {
       input.value = '';
       token++;                 // drop any in-flight autocomplete response
       hideMenu();
       updateClear();
       input.focus();
-    });
+    }
+    clearBtn.addEventListener('click', doClear);
+    // Keep ONLY a mousedown preventDefault so a mouse-press doesn't blur the input
+    // (which would hide the menu) before the click lands. Keyboard/touch are
+    // unaffected: they reach doClear via the click handler above.
+    clearBtn.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
 
     function hideMenu() {
       menu.classList.remove('is-open');
@@ -357,6 +413,20 @@
       names = [];
       active = -1;
       input.setAttribute('aria-expanded', 'false');
+      input.removeAttribute('aria-activedescendant');
+    }
+    // Show the menu shell as a non-listbox message (no options, not focusable):
+    // used for the "no results" feedback so a typed query never dead-ends silently.
+    function showMessage(text) {
+      menu.textContent = '';
+      names = [];
+      active = -1;
+      var msg = el('div', 'mtg-search__msg', text);
+      menu.appendChild(msg);
+      menu.classList.add('is-open');
+      menu.setAttribute('aria-hidden', 'false');
+      input.setAttribute('aria-expanded', 'true');
+      input.removeAttribute('aria-activedescendant');
     }
     function renderMenu(list) {
       names = list.slice(0, 12);
@@ -368,6 +438,11 @@
           var opt = el('button', 'mtg-search__opt', nm);
           opt.setAttribute('type', 'button');
           opt.setAttribute('role', 'option');
+          opt.id = uid + '-opt-' + idx;
+          // Out of the tab order (APG combobox pattern) but still pointer-clickable:
+          // keyboard users drive the list from the input via the arrow keys.
+          opt.setAttribute('tabindex', '-1');
+          opt.setAttribute('aria-selected', 'false');
           opt.setAttribute('data-i', String(idx));
           // mousedown (not click) so it fires before the input blur hides the menu.
           opt.addEventListener('mousedown', function (ev) { ev.preventDefault(); choose(nm); });
@@ -377,6 +452,7 @@
       menu.classList.add('is-open');
       menu.setAttribute('aria-hidden', 'false');
       input.setAttribute('aria-expanded', 'true');
+      input.removeAttribute('aria-activedescendant');
     }
     function setActive(i) {
       var opts = menu.querySelectorAll('.mtg-search__opt');
@@ -384,7 +460,13 @@
       if (i < 0) i = opts.length - 1;
       if (i >= opts.length) i = 0;
       active = i;
-      for (var k = 0; k < opts.length; k++) opts[k].classList.toggle('is-active', k === active);
+      for (var k = 0; k < opts.length; k++) {
+        var on = (k === active);
+        opts[k].classList.toggle('is-active', on);
+        opts[k].setAttribute('aria-selected', on ? 'true' : 'false');
+      }
+      // Point the input's virtual focus at the active option for screen readers.
+      input.setAttribute('aria-activedescendant', opts[active].id);
       try { opts[active].scrollIntoView({ block: 'nearest' }); } catch (e) {}
     }
     function choose(name) {
@@ -399,7 +481,10 @@
       autocomplete(term).then(function (list) {
         if (my !== token) return;             // a newer keystroke superseded this
         if (document.activeElement !== input) return;
-        renderMenu(list);
+        if (list && list.length) { renderMenu(list); return; }
+        // Zero matches for a real query: surface a non-interactive message row
+        // instead of leaving the user staring at an empty field with no feedback.
+        showMessage('No cards match "' + term + '".');
       }).catch(function () { /* leave the menu as-is on a transient error */ });
     }, 180);
 
@@ -427,6 +512,7 @@
     var form = input.closest('form');
     if (form) form.addEventListener('submit', function (ev) { ev.preventDefault(); });
   }
+  wire._seq = 0;   // per-mount counter for unique listbox/option ids
 
   // ---- one document-level Escape handler for both layers ----
   document.addEventListener('keydown', function (ev) {

@@ -13,6 +13,12 @@ mtg-all.dirtyshoulders.com {
         index index.html
     }
 
+    # Styled 404 (instead of a blank default error page)
+    handle_errors {
+        rewrite * /404.html
+        file_server
+    }
+
     encode gzip zstd
 
     @static path *.woff2 *.woff *.png *.jpg *.jpeg *.svg

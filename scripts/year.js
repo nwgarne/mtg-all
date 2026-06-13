@@ -134,8 +134,46 @@
     }
     lb.addEventListener('click', function (ev) { if (ev.target === lb) hide(); });
     close.addEventListener('click', hide);
+    // Collect the lightbox's own focusable elements (the images are not
+    // focusable, so in practice this is the close button; written generally
+    // so it still works if a focusable control is ever added inside).
+    function focusables() {
+      var nodes = lb.querySelectorAll(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+      var out = [];
+      for (var i = 0; i < nodes.length; i++) {
+        var n = nodes[i];
+        if (n.disabled) continue;
+        if (n.getAttribute('aria-hidden') === 'true') continue;
+        out.push(n);
+      }
+      return out;
+    }
     document.addEventListener('keydown', function (ev) {
-      if (ev.key === 'Escape' && lb.classList.contains('is-open')) hide();
+      if (!lb.classList.contains('is-open')) return;
+      if (ev.key === 'Escape') { hide(); return; }
+      // Trap Tab / Shift+Tab inside the open modal so focus cannot walk into
+      // the background (aria-modal alone does not enforce this) (a11y audit).
+      if (ev.key === 'Tab' || ev.keyCode === 9) {
+        var f = focusables();
+        if (!f.length) { ev.preventDefault(); return; }
+        var first = f[0];
+        var last = f[f.length - 1];
+        var active = document.activeElement;
+        // If focus has somehow escaped the lightbox, pull it back in.
+        if (!lb.contains(active)) {
+          ev.preventDefault();
+          (ev.shiftKey ? last : first).focus();
+          return;
+        }
+        if (ev.shiftKey && active === first) {
+          ev.preventDefault();
+          last.focus();
+        } else if (!ev.shiftKey && active === last) {
+          ev.preventDefault();
+          first.focus();
+        }
+      }
     });
     document.body.appendChild(lb);
     _lightbox = lb;
@@ -173,7 +211,9 @@
     var name = c.n || '';
     var row = el('div', 'card-tile');
     row.setAttribute('data-card', name);
-    row.setAttribute('role', 'row');
+    // NOTE: no role=row here. The accordion body is a gallery (a CSS grid of
+    // tiles), not a data table, so ARIA grid roles (row/rowgroup/cell) without
+    // a table/grid ancestor are invalid and were removed (a11y audit).
 
     // Image button -> opens the zoom lightbox (front, plus back when `b2`).
     var imgWrap = el('button', 'card-tile__image');
@@ -207,12 +247,10 @@
     }
 
     var nameCell = el('div', 'card-tile__name', name);
-    nameCell.setAttribute('role', 'cell');
     meta.appendChild(nameCell);
 
     // Sub line: SET · #cn · Rarity (mirrors the decks meta line).
     var sub = el('div', 'card-tile__sub');
-    sub.setAttribute('role', 'cell');
     var subParts = [];
     if (c.s) subParts.push(c.s.toUpperCase());
     if (c.cn) subParts.push('#' + c.cn);
@@ -228,16 +266,19 @@
     // Price - shown to everyone. nonfoil "$p", foil appended when present;
     // foil-only when p is null; "-" when both are null.
     var price = el('div', 'card-tile__price');
-    price.setAttribute('role', 'cell');
     price.appendChild(el('span', 'lbl', 'TCG'));
     var pStr = fmtPrice(c.p);
     var pfStr = fmtPrice(c.pf);
-    var priceText;
-    if (pStr && pfStr) priceText = pStr + ' · foil ' + pfStr;
-    else if (pStr) priceText = pStr;
-    else if (pfStr) priceText = 'foil ' + pfStr;
-    else priceText = '-';
-    price.appendChild(document.createTextNode(priceText));
+    // USD prominent; foil is a quieter secondary on its own line.
+    if (pStr) {
+      price.appendChild(document.createTextNode(pStr));
+      if (pfStr) price.appendChild(el('span', 'card-tile__foil', 'foil ' + pfStr));
+    } else if (pfStr) {
+      price.appendChild(document.createTextNode(pfStr));
+      price.appendChild(el('span', 'card-tile__foil', 'foil only'));
+    } else {
+      price.appendChild(document.createTextNode('-'));
+    }
     row.appendChild(price);
 
     return row;
@@ -301,22 +342,38 @@
     return byName;
   }
 
-  // Build the derived categories for the current scope + sort.
+  // Rarity predicate factory keyed by the rarity-chip value. 'all' (or any
+  // unknown value) keeps everything; otherwise an exact, case-insensitive
+  // match on the card's rarity. Cards with off-ladder rarities ('special',
+  // 'bonus') therefore only show under "All", which is correct.
+  function rarityPredicateFor(rarityKey) {
+    if (!rarityKey || rarityKey === 'all') return null; // null = keep all
+    var want = String(rarityKey).toLowerCase();
+    return function (c) { return String(c.r || '').toLowerCase() === want; };
+  }
+
+  // Build the derived categories for the current scope + sort + rarity.
   //   scope === '' -> all cards; otherwise keep only card.s === scope.
-  //   Empty categories are dropped. Each kept category gets a sorted
-  //   COPY of its cards (the base arrays are never mutated) and a count
-  //   reflecting the filtered length.
-  function deriveCategories(baseCats, scope, sortKey) {
+  //   rarityKey 'all'/null -> all rarities; otherwise that rarity only.
+  //   Filtering runs over the FULL base arrays; empty categories are dropped.
+  //   Each kept category gets a sorted COPY of its cards (the base arrays are
+  //   never mutated) and a count reflecting the filtered length.
+  function deriveCategories(baseCats, scope, sortKey, rarityKey) {
     var cmp = comparatorFor(sortKey);
+    var rarityOk = rarityPredicateFor(rarityKey);
     var out = [];
     for (var i = 0; i < baseCats.length; i++) {
       var cat = baseCats[i];
       var src = cat.cards || [];
       var cards;
-      if (scope) {
+      if (scope || rarityOk) {
+        // Single filtering pass over the full array (scope and/or rarity).
         cards = [];
         for (var j = 0; j < src.length; j++) {
-          if (src[j].s === scope) cards.push(src[j]);
+          var card = src[j];
+          if (scope && card.s !== scope) continue;
+          if (rarityOk && !rarityOk(card)) continue;
+          cards.push(card);
         }
         if (!cards.length) continue; // drop categories that empty out
       } else {
@@ -338,17 +395,78 @@
   var catBodies = [];
   var catCards = [];
   var catNames = [];
+  // Live pill registry (parallel to the derived category order) so opening a
+  // category can flag the matching jump-pill active. Rebuilt with the toolbar.
+  var catPills = [];
+  // Monotonic id seed so each category body gets a unique, stable id for the
+  // head's aria-controls (Item 9), even across re-renders.
+  var _catUid = 0;
 
-  function renderTilesInto(body, cards) {
-    var frag = document.createDocumentFragment();
-    for (var i = 0; i < cards.length; i++) {
-      frag.appendChild(buildCardTile(cards[i]));
+  // ----- Chunked tile render (perf) -----
+  // A single open category can hold ~4,500 tiles; mounting them in one task
+  // blocks the main thread for seconds (looks hung). Instead we append in
+  // CHUNKS across animation frames so the first rows paint immediately and no
+  // single task runs long. A render TOKEN invalidates any in-flight render the
+  // instant the user collapses or switches category, so stale chunks (and the
+  // wrong category's tiles) are never appended. Render-on-expand is preserved:
+  // still only the open category's tiles ever touch the DOM.
+  var TILE_CHUNK = 100;
+  var _renderToken = 0;
+  var _renderRAF = 0;
+
+  // Bumping the token cancels whatever chunked render is in flight.
+  function cancelChunkedRender() {
+    _renderToken++;
+    if (_renderRAF) {
+      if (typeof cancelAnimationFrame === 'function') {
+        try { cancelAnimationFrame(_renderRAF); } catch (e) {}
+      }
+      _renderRAF = 0;
     }
-    body.appendChild(frag);
+  }
+
+  // Render `cards` into `body` a chunk at a time. `note` (optional) is a
+  // "Loading N cards..." element removed when the last chunk lands.
+  function renderTilesChunked(body, cards, note) {
+    cancelChunkedRender();               // invalidate any prior in-flight render
+    var token = _renderToken;
+    var total = cards.length;
+    // Small categories: render synchronously, no loading note, no frame wait.
+    if (total <= TILE_CHUNK) {
+      var frag0 = document.createDocumentFragment();
+      for (var k = 0; k < total; k++) frag0.appendChild(buildCardTile(cards[k]));
+      body.appendChild(frag0);
+      return;
+    }
+    var i = 0;
+    var step = function () {
+      _renderRAF = 0;
+      // Abort if a newer render (or a collapse) superseded this one.
+      if (token !== _renderToken) return;
+      var end = Math.min(i + TILE_CHUNK, total);
+      var frag = document.createDocumentFragment();
+      for (; i < end; i++) frag.appendChild(buildCardTile(cards[i]));
+      body.appendChild(frag);
+      if (i < total) {
+        if (note) note.textContent = 'Loading ' + fmtInt(total - i) + ' cards...';
+        if (typeof requestAnimationFrame === 'function') {
+          _renderRAF = requestAnimationFrame(step);
+        } else {
+          _renderRAF = 0;
+          setTimeout(step, 16);
+        }
+      } else if (note && note.parentNode) {
+        note.parentNode.removeChild(note);  // done: clear the loading note
+      }
+    };
+    step();                              // first chunk paints in this frame
   }
 
   function collapse(idx) {
     if (idx < 0 || idx >= catWraps.length) return;
+    // Stop any chunked render targeting this (or any) category before we clear,
+    // so an in-flight frame can't repopulate the body we just emptied.
+    cancelChunkedRender();
     catWraps[idx].classList.add('is-collapsed');
     catHeads[idx].setAttribute('aria-expanded', 'false');
     // Clear the tiles so the DOM never holds more than the single open category.
@@ -357,9 +475,22 @@
 
   function expand(idx) {
     if (idx < 0 || idx >= catWraps.length) return;
-    renderTilesInto(catBodies[idx], catCards[idx]);
+    var body = catBodies[idx];
+    body.innerHTML = '';
     catWraps[idx].classList.remove('is-collapsed');
     catHeads[idx].setAttribute('aria-expanded', 'true');
+    // A loading note for big categories; renderTilesChunked clears it when done
+    // and skips it entirely for small ones (synchronous render).
+    var note = el('p', 'deck-cat__loading');
+    note.setAttribute('role', 'status');
+    note.setAttribute('aria-live', 'polite');
+    var cards = catCards[idx] || [];
+    if (cards.length > TILE_CHUNK) {
+      note.textContent = 'Loading ' + fmtInt(cards.length) + ' cards...';
+      body.appendChild(note);
+    }
+    renderTilesChunked(body, cards, note);
+    syncActivePills();
   }
 
   // Find the index of the currently open category, or -1.
@@ -369,6 +500,25 @@
       if (catNames[i] === openName) return i;
     }
     return -1;
+  }
+
+  // Reflect the open category on the jump-pills: the matching pill gets the
+  // .is-active treatment + aria-current="true"; every other pill is cleared.
+  // Called whenever a category opens, the scope/sort changes, or the rarity
+  // filter re-renders the toolbar (Item 4).
+  function syncActivePills() {
+    var cur = openIndex();
+    for (var i = 0; i < catPills.length; i++) {
+      var pill = catPills[i];
+      if (!pill) continue;
+      if (i === cur) {
+        pill.classList.add('is-active');
+        pill.setAttribute('aria-current', 'true');
+      } else {
+        pill.classList.remove('is-active');
+        pill.removeAttribute('aria-current');
+      }
+    }
   }
 
   // Scroll so category idx's header parks just under the sticky toolbar.
@@ -416,12 +566,14 @@
       // Toggle the open one shut.
       collapse(idx);
       openName = null;
+      syncActivePills();               // nothing open: clear the active pill
       return;
     }
-    // Auto-collapse whatever is open, then open the requested one.
+    // Auto-collapse whatever is open, then open the requested one. Set openName
+    // BEFORE expand() so the pill sync inside expand() reads the new open index.
     if (cur !== -1) collapse(cur);
-    expand(idx);
     openName = catNames[idx];
+    expand(idx);
     if (scroll) scrollToCat(idx);
   }
 
@@ -431,8 +583,8 @@
     var cur = openIndex();
     if (cur === idx) { scrollToCat(idx); return; }
     if (cur !== -1) collapse(cur);
+    openName = catNames[idx];          // set before expand() for the pill sync
     expand(idx);
-    openName = catNames[idx];
     scrollToCat(idx);
   }
 
@@ -440,18 +592,29 @@
     var wrap = el('div', 'deck-cat is-collapsed');
     wrap.setAttribute('data-cat', category.name);
 
+    var bodyId = 'deck-cat-body-' + (++_catUid);
+
     var head = el('button', 'deck-cat__head');
     head.setAttribute('type', 'button');
     head.setAttribute('aria-expanded', 'false');
+    // Tie the disclosure button to the panel it controls (Item 9).
+    head.setAttribute('aria-controls', bodyId);
     head.appendChild(el('span', 'deck-cat__title', '// ' + category.name));
     var count = (category.count != null) ? category.count : (category.cards ? category.cards.length : 0);
     head.appendChild(el('span', 'deck-cat__count', fmtInt(count) + (count === 1 ? ' card' : ' cards')));
     head.appendChild(el('span', 'deck-cat__chev', '▾'));
     head.addEventListener('click', function () { toggle(idx, true); });
-    wrap.appendChild(head);
+    // Wrap the disclosure button in a heading so the accordion exposes a
+    // document outline / is reachable by heading navigation (Item 9). The
+    // heading carries no visual style of its own; the head keeps its look.
+    var heading = el('h3', 'deck-cat__heading');
+    heading.appendChild(head);
+    wrap.appendChild(heading);
 
+    // Gallery of card tiles. NOTE: no role=rowgroup - this is a CSS grid of
+    // tiles, not a table, so the ARIA grid role was removed (Item 10).
     var body = el('div', 'deck-cat__body');
-    body.setAttribute('role', 'rowgroup');
+    body.id = bodyId;
     wrap.appendChild(body);
 
     catHeads[idx] = head;
@@ -465,8 +628,13 @@
   // (Re)build the accordion grid from a derived-categories array into
   // `gridEl`. Preserves the render-on-expand + one-open invariant: if
   // the previously-open category still exists it is reopened (and only
-  // its tiles are rendered); otherwise everything stays collapsed.
+  // its tiles are rendered). On a fresh scope (or if the open category
+  // filtered out) the FIRST category is auto-opened so cards show right
+  // away rather than landing on an all-collapsed (blank) accordion (Item 3).
   function renderAccordion(gridEl, derivedCats) {
+    // Any prior chunked render is for the old block set; stop it before the
+    // parallel arrays are reset so a late frame can't write into a dead body.
+    cancelChunkedRender();
     // Reset the parallel-array bookkeeping for the fresh block set.
     catHeads = [];
     catWraps = [];
@@ -478,6 +646,7 @@
     if (!derivedCats.length) {
       // Empty scope: friendly inline note.
       openName = null;
+      syncActivePills();
       var note = el('p', 'year-controls__empty',
         'No cards in this set for the current view.');
       gridEl.appendChild(note);
@@ -488,13 +657,18 @@
       gridEl.appendChild(buildCatBlock(derivedCats[k], k));
     }
 
-    // Re-open the same category by name if it survived the re-derive.
+    // Re-open the same category by name if it survived the re-derive
+    // (keeps the open section stable across sort / rarity changes).
     var reopen = openIndex();
-    if (reopen !== -1) {
-      expand(reopen); // renders only this one category's tiles
-    } else {
-      openName = null;
+    if (reopen === -1) {
+      // Fresh scope, or the open category filtered out: auto-open the first
+      // (which is first in CATEGORY_ORDER, the order the data already arrives
+      // in and deriveCategories preserves). Expand only - NO scroll - so the
+      // page stays at the top showing the hero + toolbar + the first section.
+      openName = catNames[0];
+      reopen = 0;
     }
+    expand(reopen); // renders only this one category's tiles (chunked)
   }
 
   // ============================================================
@@ -558,6 +732,16 @@
     { value: 'price', label: 'Price (high to low)' },
     { value: 'rarity', label: 'Rarity' },
     { value: 'cmc', label: 'Mana value (low to high)' }
+  ];
+
+  // --- Rarity filter chips (scope toolbar). 'all' is the default; the others
+  //     match a single card rarity. Off-ladder rarities only appear under All.
+  var RARITY_OPTIONS = [
+    { value: 'all', label: 'All' },
+    { value: 'common', label: 'Common' },
+    { value: 'uncommon', label: 'Uncommon' },
+    { value: 'rare', label: 'Rare' },
+    { value: 'mythic', label: 'Mythic' }
   ];
 
   // ============================================================
@@ -676,6 +860,64 @@
     return cell;
   }
 
+  // --- Scope readout (compact breadcrumb; the SCOPE view's hero) ---
+  // Replaces the big YEAR hero in a scope so the readout reflects the SCOPE,
+  // not the year (Item 2). Reads like "2024 > Foundations · 730 cards" (or
+  // "2024 > All cards · ..."). The count + value come from the DERIVED cats so
+  // they track the live scope AND any active rarity filter. No em dashes.
+  function buildScopeReadout(ctx, state, derived) {
+    // Live totals across the derived (already scope+rarity filtered) cats.
+    var count = 0, value = 0;
+    for (var i = 0; i < derived.length; i++) {
+      var cards = derived[i].cards || [];
+      count += derived[i].count != null ? derived[i].count : cards.length;
+      for (var j = 0; j < cards.length; j++) {
+        var v = parseFloat(cards[j].p);
+        if (isFinite(v)) value += v;
+      }
+    }
+    var scopeName = state.scope
+      ? (ctx.setName(state.scope) || state.scope.toUpperCase())
+      : 'All cards';
+
+    var bc = el('nav', 'year-scopebar');
+    bc.setAttribute('aria-label', 'Scope');
+
+    var crumb = el('div', 'year-scopebar__crumb');
+    // Year segment links back to the picker (same target as the Sets button).
+    var yearLink = el('a', 'year-scopebar__year');
+    yearLink.setAttribute('href', '#');
+    yearLink.textContent = ctx.year;
+    yearLink.setAttribute('aria-label', 'Back to ' + ctx.year + ' set cards');
+    yearLink.addEventListener('click', function (ev) {
+      ev.preventDefault();
+      clearHash();
+    });
+    crumb.appendChild(yearLink);
+    var sepEl = el('span', 'year-scopebar__sep', '>');
+    sepEl.setAttribute('aria-hidden', 'true');
+    crumb.appendChild(sepEl);
+    var nameEl = el('span', 'year-scopebar__name', scopeName);
+    nameEl.setAttribute('title', scopeName);
+    crumb.appendChild(nameEl);
+    bc.appendChild(crumb);
+
+    var stats = el('div', 'year-scopebar__stats');
+    var cntEl = el('span', 'year-scopebar__count');
+    cntEl.appendChild(el('strong', null, fmtInt(count)));
+    cntEl.appendChild(document.createTextNode(count === 1 ? ' card' : ' cards'));
+    stats.appendChild(cntEl);
+    if (value > 0) {
+      stats.appendChild(el('span', 'year-scopebar__sep-dot', '·'));
+      var valEl = el('span', 'year-scopebar__value', fmtMoney(value));
+      valEl.setAttribute('title', 'Total nonfoil market value');
+      stats.appendChild(valEl);
+    }
+    bc.appendChild(stats);
+
+    return bc;
+  }
+
   // ============================================================
   //  PICKER VIEW - the set cards grid (replaces the Set dropdown)
   //  Built to the homepage .year-card look (reused via home.css).
@@ -787,7 +1029,10 @@
   // ============================================================
   //  SCOPE VIEW - sticky toolbar + the type accordion
   // ============================================================
-  function buildToolbar(ctx, state, derived, onSortChange) {
+  // onChange() is fired whenever the sort OR the rarity filter changes; the
+  // caller (renderScope.apply) re-derives + repaints. The pill registry
+  // (catPills) is rebuilt here so syncActivePills can flag the open type.
+  function buildToolbar(ctx, state, derived, onChange) {
     var bar = el('div', 'year-toolbar');
     bar.setAttribute('role', 'group');
     bar.setAttribute('aria-label', 'Scope controls');
@@ -827,14 +1072,47 @@
     sortSel.value = state.sort;
     sortSel.addEventListener('change', function () {
       state.sort = sortSel.value;
-      onSortChange();
+      onChange();
     });
     sortField.appendChild(sortSel);
     topRow.appendChild(sortField);
 
     bar.appendChild(topRow);
 
-    // Row 2: type jump-pills (one per non-empty type in this scope).
+    // Row 2: rarity filter chips (All / Common / Uncommon / Rare / Mythic).
+    // Filters the cards within the open scope across every type category by
+    // re-deriving on the FULL arrays; the active sort + auto-open are kept
+    // by renderAccordion (Item 5). CSP-safe: wired via addEventListener.
+    var rarityRow = el('div', 'year-toolbar__rarity');
+    rarityRow.setAttribute('role', 'group');
+    rarityRow.setAttribute('aria-label', 'Filter by rarity');
+    var curRarity = state.rarity || 'all';
+    for (var ri = 0; ri < RARITY_OPTIONS.length; ri++) {
+      (function (opt) {
+        var chip = el('button', 'year-rarity year-rarity--' + opt.value);
+        chip.setAttribute('type', 'button');
+        chip.textContent = opt.label;
+        chip.setAttribute('aria-label', 'Show ' +
+          (opt.value === 'all' ? 'all rarities' : opt.label + ' cards'));
+        if (curRarity === opt.value) {
+          chip.classList.add('is-active');
+          chip.setAttribute('aria-pressed', 'true');
+        } else {
+          chip.setAttribute('aria-pressed', 'false');
+        }
+        chip.addEventListener('click', function () {
+          if (state.rarity === opt.value) return; // no-op re-click
+          state.rarity = opt.value;
+          onChange();
+        });
+        rarityRow.appendChild(chip);
+      })(RARITY_OPTIONS[ri]);
+    }
+    bar.appendChild(rarityRow);
+
+    // Row 3: type jump-pills (one per non-empty type in this scope). Each pill
+    // is registered into catPills so syncActivePills can mark the open type.
+    catPills = [];
     if (derived.length) {
       var pills = el('div', 'year-toolbar__pills');
       pills.setAttribute('aria-label', 'Jump to type');
@@ -848,6 +1126,7 @@
             'Jump to ' + cat.name + ' (' + fmtInt(cat.count) + ' cards)');
           pill.addEventListener('click', function () { openCat(idx); });
           pills.appendChild(pill);
+          catPills[idx] = pill;
         })(i, derived[i]);
       }
       bar.appendChild(pills);
@@ -858,21 +1137,37 @@
 
   function renderScope(ctx, host, state) {
     host.innerHTML = '';
-    host.appendChild(ctx.hero);
+
+    // Compact scope breadcrumb stands in for the big YEAR hero here (Item 2).
+    // Held in a slot so it can be rebuilt with the toolbar when the rarity
+    // filter changes the live count/value.
+    var readoutHolder = { node: null };
 
     var grid = el('div', 'deck-grid');
     grid.id = 'year-grid';
 
     var toolbarHolder = { bar: null };
 
-    // Re-derive + repaint the accordion (and rebuild the toolbar pills,
-    // since the non-empty type set can change with scope - though within
-    // a single scope view only the sort changes, the pills are stable).
+    // Re-derive + repaint the accordion, the scope readout, and the toolbar
+    // (rarity chips, sort, and the jump-pills, which track the live derived
+    // set). Filtering runs on the FULL base arrays; render-on-expand + the
+    // auto-open are preserved by renderAccordion.
     function apply() {
-      // Remember the chosen sort so it carries to the next scope this session.
+      // Remember the chosen sort + rarity so they carry to the next scope.
       ctx.lastSort = state.sort;
-      var derived = deriveCategories(ctx.baseCats, state.scope, state.sort);
-      // Rebuild the toolbar so the jump-pills reflect the live derived set.
+      ctx.lastRarity = state.rarity;
+      var derived = deriveCategories(ctx.baseCats, state.scope, state.sort, state.rarity);
+
+      // Rebuild the scope readout so its count/value reflect the live filter.
+      var newReadout = buildScopeReadout(ctx, state, derived);
+      if (readoutHolder.node && readoutHolder.node.parentNode) {
+        readoutHolder.node.parentNode.replaceChild(newReadout, readoutHolder.node);
+      } else {
+        host.insertBefore(newReadout, grid);
+      }
+      readoutHolder.node = newReadout;
+
+      // Rebuild the toolbar so the chips/pills reflect the live derived set.
       var newBar = buildToolbar(ctx, state, derived, apply);
       if (toolbarHolder.bar && toolbarHolder.bar.parentNode) {
         toolbarHolder.bar.parentNode.replaceChild(newBar, toolbarHolder.bar);
@@ -882,6 +1177,8 @@
       toolbarHolder.bar = newBar;
       watchToolbar(newBar);
       renderAccordion(grid, derived);
+      // Reflect the (possibly auto-opened) category on the freshly built pills.
+      syncActivePills();
     }
 
     host.appendChild(grid);
@@ -916,12 +1213,17 @@
       // Reset scroll to the top so the picker starts at the hero.
       try { window.scrollTo(0, 0); } catch (e) {}
     } else {
-      // Scope view. Reset the open category whenever the scope changes.
+      // Scope view. Reset the open category whenever the scope changes so the
+      // new scope auto-opens its first category (Item 3).
       if (ctx.lastScope !== route.scope) {
         openName = null;
         ctx.lastScope = route.scope;
       }
-      var state = { scope: route.scope, sort: ctx.lastSort || 'name' };
+      var state = {
+        scope: route.scope,
+        sort: ctx.lastSort || 'name',
+        rarity: ctx.lastRarity || 'all'
+      };
       renderScope(ctx, host, state);
       // Land at the top of the new scope view.
       try { window.scrollTo(0, 0); } catch (e) {}
@@ -1014,7 +1316,8 @@
       scopeCount: scopeCount,
       matchSet: matchSet,
       lastScope: undefined,
-      lastSort: 'name'
+      lastSort: 'name',
+      lastRarity: 'all'
     };
 
     openName = null;
