@@ -836,7 +836,7 @@
     hero.appendChild(h1);
 
     var tagline = el('p', 'hero__tagline');
-    tagline.appendChild(document.createTextNode('Every Magic card printed in ' + year + ', grouped by type. '));
+    tagline.appendChild(document.createTextNode('Every Magic card printed in ' + year + '. Pick a set below, or All cards for the whole year. '));
     var back = el('a');
     back.setAttribute('href', '/');
     back.textContent = 'All years';
