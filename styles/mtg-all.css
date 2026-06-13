@@ -1,0 +1,101 @@
+/* ============================================================
+   mtg-all.dirtyshoulders.com - SHARED CHROME
+   ------------------------------------------------------------
+   The slim top header / wordmark, shared by the homepage and
+   every year page. Built on the decks.dirtyshoulders tokens so
+   it reads as the same product.
+
+   OWNED BY: homepage agent.
+   The year-page build links this file and assumes .mtg-topbar
+   (and the wordmark inside it) already exists. Year-page +
+   accordion styles are appended below this block in clearly
+   commented sections by the year-page agent.
+   ============================================================ */
+
+@layer components {
+
+  /* ============================================================
+     TOP HEADER - slim, sticky, single wordmark on the left.
+     This is the only nav on the site: "MTG · by year" -> /.
+     ============================================================ */
+  .mtg-topbar {
+    position: sticky;
+    top: 0;
+    z-index: var(--z-sticky);
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    min-height: 56px;
+    padding: var(--space-2xs) 0;
+    background: linear-gradient(180deg,
+      color-mix(in oklch, var(--ink-000) 92%, transparent) 0%,
+      color-mix(in oklch, var(--ink-000) 78%, transparent) 100%);
+    border-bottom: 1px solid var(--rule-medium);
+    backdrop-filter: blur(8px) saturate(1.1);
+    -webkit-backdrop-filter: blur(8px) saturate(1.1);
+  }
+
+  /* The header content tracks the page wrap so the wordmark lines
+     up with the body column on every page width. */
+  .mtg-topbar__inner {
+    width: 100%;
+    max-width: var(--wrap-wide);
+    margin: 0 auto;
+    padding: 0 var(--space-md);
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+  }
+
+  /* WORDMARK - "MTG · by year" linking home. */
+  .mtg-wordmark {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--space-2xs);
+    text-decoration: none;
+    color: var(--bone-900);
+    line-height: 1;
+    white-space: nowrap;
+    transition: color var(--dur-fast) var(--ease-out-quart);
+  }
+  .mtg-wordmark:hover,
+  .mtg-wordmark:focus-visible {
+    color: var(--bone-900);
+    text-decoration: none;
+    outline: none;
+  }
+  .mtg-wordmark__mark {
+    font-family: var(--font-display);
+    font-weight: var(--fw-display-bold);
+    font-size: 1.0625rem;
+    letter-spacing: var(--tracking-wide);
+    text-transform: uppercase;
+    color: var(--bone-900);
+  }
+  .mtg-wordmark__dot {
+    color: var(--accent);
+    font-family: var(--font-mono);
+    transition: transform var(--dur-fast) var(--ease-out-quart);
+  }
+  .mtg-wordmark__sub {
+    font-family: var(--font-mono);
+    font-size: var(--fs-label);
+    letter-spacing: var(--tracking-widest);
+    text-transform: uppercase;
+    color: var(--bone-700);
+    transition: color var(--dur-fast) var(--ease-out-quart);
+  }
+  .mtg-wordmark:hover .mtg-wordmark__sub,
+  .mtg-wordmark:focus-visible .mtg-wordmark__sub {
+    color: var(--accent);
+  }
+  .mtg-wordmark:hover .mtg-wordmark__dot,
+  .mtg-wordmark:focus-visible .mtg-wordmark__dot {
+    transform: translateX(2px);
+  }
+
+  @media (max-width: 640px) {
+    .mtg-topbar { min-height: 50px; }
+    .mtg-topbar__inner { padding: 0 var(--space-sm); }
+  }
+}

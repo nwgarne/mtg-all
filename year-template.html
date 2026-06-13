@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Title is set by year.js from the URL path; this is the no-JS fallback. -->
+  <title>MTG by year</title>
+  <meta name="description" content="Browse every Magic: the Gathering card from a given year, grouped by card type." />
+  <meta name="theme-color" content="#0a0f0c" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="mask-icon" href="/favicon.svg" color="#d7b25a" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Antonio:wght@400;700&family=Oswald:wght@500;700&family=IBM+Plex+Mono:wght@400&family=Fraunces:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet" />
+  <link rel="preconnect" href="https://cards.scryfall.io" crossorigin />
+
+  <!-- Visual system copied from decks.dirtyshoulders, then site + page styles. -->
+  <link rel="stylesheet" href="/styles/tokens.css" />
+  <link rel="stylesheet" href="/styles/global.css" />
+  <link rel="stylesheet" href="/styles/hero.css" />
+  <link rel="stylesheet" href="/styles/button.css" />
+  <link rel="stylesheet" href="/styles/stat-row.css" />
+  <link rel="stylesheet" href="/styles/card-tile.css" />
+  <link rel="stylesheet" href="/styles/mtg-all.css" />
+  <link rel="stylesheet" href="/styles/year.css" />
+
+  <script src="/scripts/year.js" defer></script>
+</head>
+<body data-bracket="3">
+  <a href="#content" class="skip-link">Skip to content</a>
+
+  <header class="mtg-topbar">
+    <div class="mtg-topbar__inner">
+      <a class="mtg-wordmark" href="/" aria-label="MTG by year — home">
+        <span class="mtg-wordmark__mark">MTG</span>
+        <span class="mtg-wordmark__dot">·</span>
+        <span class="mtg-wordmark__sub">by year</span>
+      </a>
+    </div>
+  </header>
+
+  <main id="content" class="wrap wide">
+    <!-- year.js reads the year from the URL path and renders into here. -->
+    <div id="year-root" data-year-root>
+      <p class="year-grid__loading">Loading cards…</p>
+    </div>
+  </main>
+</body>
+</html>

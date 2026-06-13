@@ -1,0 +1,303 @@
+/* ============================================================
+   decks.dirtyshoulders.com - design tokens
+   ------------------------------------------------------------
+   Multi-deck SaaS design system. Tokens are theme-able per
+   tenant: every deck plugs in by setting --accent-* on body
+   (via data-bracket="N" or a future data-deck="..." attr).
+
+   Read order:
+     1. neutrals + paper-stack
+     2. bracket accent ramps (b2 / b3 / b4)
+     3. accent semantic aliases (--accent → bound per bracket)
+     4. type, space, radius, shadow, motion
+   ============================================================ */
+
+@layer tokens {
+  :root {
+
+    /* ============================================================
+       1. NEUTRAL PALETTE  ("bone on ink")
+       ------------------------------------------------------------
+       Warm-tinted neutrals. Even on B2 (green) the substrate
+       leans toward gold so the site never feels clinical.
+       OKLCH chroma drops as lightness approaches the extremes -
+       prevents garish saturation at the brightest tones.
+       ============================================================ */
+
+    /* INK - page background and deepest surfaces. */
+    --ink-000: oklch(15% 0.008 95);    /* near-black, the page floor */
+    --ink-050: oklch(18% 0.010 95);    /* card surface (paper-1) */
+    --ink-100: oklch(21% 0.012 92);    /* well surface (paper-2, sticky bar, sb-cluster) */
+    --ink-150: oklch(24% 0.014 90);    /* raised surface (hover, active card) */
+    --ink-200: oklch(28% 0.016 88);    /* divider chip, badge background */
+
+    /* BONE - primary type. Warm cream, not white. */
+    --bone-900: oklch(94% 0.020 85);   /* headline-on-ink, only the loudest */
+    --bone-800: oklch(89% 0.020 85);   /* body / strong */
+    --bone-700: oklch(74% 0.018 82);   /* secondary type, muted strong */
+    --bone-500: oklch(58% 0.016 80);   /* tertiary, dim label */
+    --bone-300: oklch(44% 0.014 80);   /* faintest readable, separator copy */
+
+    /* RULE - hairline borders. Two strengths so density reads. */
+    --rule-soft:    oklch(94% 0.020 85 / 0.10);
+    --rule-medium:  oklch(94% 0.020 85 / 0.18);
+    --rule-strong:  oklch(94% 0.020 85 / 0.32);
+
+
+    /* ============================================================
+       2. BRACKET ACCENT RAMPS
+       ------------------------------------------------------------
+       Each bracket has a 9-step OKLCH scale.
+       Naming follows tailwind-style: 500 is the "true" accent,
+       400/600 are hover-bright/hover-dim, 100/200 are washes,
+       800/900 are deep shadows.
+       ============================================================ */
+
+    /* B2 - MAKO (casual, fair, green) */
+    --mako-100: oklch(96% 0.045 158);
+    --mako-200: oklch(90% 0.090 158);
+    --mako-300: oklch(82% 0.140 158);
+    --mako-400: oklch(76% 0.170 158);
+    --mako-500: oklch(70% 0.185 158);  /* canonical mako */
+    --mako-600: oklch(60% 0.165 158);
+    --mako-700: oklch(50% 0.140 160);
+    --mako-800: oklch(38% 0.105 162);
+    --mako-900: oklch(28% 0.075 164);
+
+    /* B3 - GOLD (standard, amber) */
+    --gold-100: oklch(96% 0.040 88);
+    --gold-200: oklch(91% 0.085 86);
+    --gold-300: oklch(85% 0.120 84);
+    --gold-400: oklch(80% 0.140 82);
+    --gold-500: oklch(75% 0.135 80);   /* canonical gold */
+    --gold-600: oklch(65% 0.115 78);
+    --gold-700: oklch(55% 0.095 76);
+    --gold-800: oklch(40% 0.070 74);
+    --gold-900: oklch(28% 0.050 72);
+
+    /* B4 - RUST (competitive, red-orange) */
+    --rust-100: oklch(96% 0.040 38);
+    --rust-200: oklch(89% 0.080 36);
+    --rust-300: oklch(78% 0.140 34);
+    --rust-400: oklch(68% 0.170 32);
+    --rust-500: oklch(62% 0.180 30);   /* canonical rust */
+    --rust-600: oklch(54% 0.165 28);
+    --rust-700: oklch(44% 0.135 28);
+    --rust-800: oklch(34% 0.100 28);
+    --rust-900: oklch(24% 0.070 28);
+
+
+    /* ============================================================
+       3. ACCENT SEMANTIC ALIASES
+       ------------------------------------------------------------
+       These are what components SHOULD reference. The bracket
+       blocks below (body[data-bracket]) rebind them so the same
+       component class re-skins without touching its CSS.
+
+       Default is B3 / gold (the unbracketed deck home, the
+       landing page, the system-level chrome).
+       ============================================================ */
+
+    --accent:        var(--gold-500);
+    --accent-bright: var(--gold-400);
+    --accent-deep:   var(--gold-700);
+    --accent-rail:   var(--gold-600);  /* ~5.2:1 against ink, for borders/hairlines */
+    --accent-shadow: var(--gold-900);
+
+    /* Glow + wash - kept as color-mix so they re-derive
+       automatically when --accent rebinds. */
+    --accent-glow:   color-mix(in oklch, var(--accent) 32%, transparent);
+    --accent-soft:   color-mix(in oklch, var(--accent) 55%, transparent);
+    --accent-wash:   color-mix(in oklch, var(--accent) 10%, transparent);
+    --accent-wash-2: color-mix(in oklch, var(--accent-deep) 6%, transparent);
+    --accent-ink:    var(--ink-000); /* text color on a solid accent fill */
+
+    /* ============================================================
+       SEMANTIC STATUS COLORS
+       ------------------------------------------------------------
+       Decoupled from bracket. "is-out" red, "is-in" green,
+       and gc-gold (Game Changer pill) are constant across
+       brackets - they're meaning, not skin.
+       ============================================================ */
+    --status-out:        oklch(58% 0.200 18);   /* warmer crimson, away from rust 30 */
+    --status-out-deep:   oklch(45% 0.170 18);
+    --status-in:         oklch(72% 0.190 145);  /* cooler emerald, away from mako 158 */
+    --status-in-deep:    oklch(52% 0.150 145);
+    --status-gc:         oklch(82% 0.155 85);   /* brighter, more saturated than accent-gold */
+    --status-gc-deep:    oklch(60% 0.120 82);
+
+
+    /* ============================================================
+       4. TYPOGRAPHY
+       ------------------------------------------------------------
+       Fonts:
+         - Antonio   - display headlines, big numbers (slab-grotesk, scoreboard)
+         - Oswald    - secondary headlines, section labels (preserved from brand)
+         - Fraunces  - body, italic accents (preserved from brand)
+         - IBM Plex Mono - labels, kickers, captions
+       ============================================================ */
+
+    --font-display: "Antonio", "Oswald", "Arial Narrow", sans-serif;
+    --font-headline: "Oswald", "Antonio", "Arial Narrow", sans-serif;
+    --font-body: "Fraunces", "Iowan Old Style", "Charter", Georgia, serif;
+    /* Mono used for kickers, labels, prices. */
+    --font-mono: "IBM Plex Mono", ui-monospace, "JetBrains Mono", monospace;
+
+    /* Modular scale, fluid for marketing pages. 1.333 ratio between
+       major steps; values clamp at the small breakpoint so phones
+       don't get headlines they can't fit. */
+    --fs-mega:   clamp(3.5rem, 9vw, 8.5rem);    /* 56 → 136  h1, landing hero */
+    --fs-hero:   clamp(2.75rem, 7vw, 6.5rem);   /* 44 → 104  h1, deck home */
+    --fs-display: clamp(2rem, 4.5vw, 3.5rem);   /* 32 →  56  h1, secondary pages */
+    --fs-h2:     clamp(1.75rem, 3vw, 2.5rem);   /* 28 →  40  h2 */
+    --fs-h3:     1.0625rem;                     /* 17px      h3 (label-style) */
+    --fs-lead:   clamp(1.125rem, 1.5vw, 1.375rem); /* 18 → 22  tagline */
+    --fs-body:   1.03125rem;                    /* 16.5      body */
+    --fs-body-sm: 0.96875rem;                   /* 15.5      callout */
+    --fs-meta:   0.875rem;                      /* 14        secondary copy */
+    --fs-caption: 0.8125rem;                    /* 13        captions */
+    --fs-label:  0.6875rem;                     /* 11        IBM-style kicker */
+    --fs-label-sm: 0.59375rem;                  /* 9.5       smallest mono label */
+
+    /* Line-heights. Headlines tight, body loose, light-on-dark
+       gets a +0.05 bump for readability. */
+    --lh-tight:   0.88;
+    --lh-display: 1.05;
+    --lh-snug:    1.2;
+    --lh-body:    1.65;     /* +0.05 over normal - light on dark */
+    --lh-loose:   1.75;
+
+    /* Letter-spacing. Display tracks tight; mono labels track wide. */
+    --tracking-tightest: -0.02em;
+    --tracking-tight:    -0.01em;
+    --tracking-normal:   0;
+    --tracking-wide:     0.08em;
+    --tracking-wider:    0.18em;   /* mono caption */
+    --tracking-widest:   0.28em;   /* mono kicker */
+    --tracking-mega:     0.35em;   /* hero kicker */
+
+    /* Weights. Antonio doesn't ship a 700 on Google - we use 600
+       for "bold" display work and 400 for stroke variants. */
+    --fw-display-bold:    600;
+    --fw-display-regular: 400;
+    --fw-display-light:   300;
+    --fw-body-regular:    400;
+    --fw-body-strong:     500;
+
+
+    /* ============================================================
+       5. SPACING - 4pt scale, semantic names
+       ------------------------------------------------------------
+       Used everywhere via var(--space-md) etc. Keep pixel-name
+       tokens out of components.
+       ============================================================ */
+    --space-3xs: 0.25rem;   /*  4 */
+    --space-2xs: 0.5rem;    /*  8 */
+    --space-xs:  0.75rem;   /* 12 */
+    --space-sm:  1rem;      /* 16 */
+    --space-md:  1.5rem;    /* 24 */
+    --space-lg:  2.25rem;   /* 36 */
+    --space-xl:  3rem;      /* 48 */
+    --space-2xl: 4.5rem;    /* 72 */
+    --space-3xl: 6rem;      /* 96  - default section break */
+    --space-4xl: 9rem;      /* 144 - hero top padding on desktop */
+
+    /* Container widths. Wrap is the default reading column;
+       wrap-wide for tournament + decklist. */
+    --wrap-narrow: 64ch;        /* long-form prose */
+    --wrap-default: 60rem;      /* 960px - bracket play guide */
+    --wrap-wide:    72rem;      /* 1152px - decklist + landing */
+    --wrap-full:    90rem;      /* 1440px - landing hero, art */
+
+
+    /* ============================================================
+       6. RADIUS - sparing. The system reads as "drafted on
+       graph paper" so round things are the exception.
+       ============================================================ */
+    --r-sharp: 0;
+    --r-xs:    2px;
+    --r-sm:    3px;
+    --r-md:    4px;
+    --r-lg:    6px;
+    --r-pill:  999px;
+
+
+    /* ============================================================
+       7. SHADOW + GLOW
+       ------------------------------------------------------------
+       Two registers:
+         - elevation  - for surfaces that lift (cards, lightbox)
+         - accent-lift - colored glow for accent-led emphasis
+       ============================================================ */
+    --elev-1: 0 1px 0 oklch(0% 0 0 / 0.4),
+              0 2px 6px oklch(0% 0 0 / 0.35);
+    --elev-2: 0 2px 0 oklch(0% 0 0 / 0.35),
+              0 8px 24px oklch(0% 0 0 / 0.45);
+    --elev-3: 0 4px 0 oklch(0% 0 0 / 0.35),
+              0 16px 48px oklch(0% 0 0 / 0.55);
+
+    --accent-lift-sm: 0 6px 18px var(--accent-glow);
+    --accent-lift-md: 0 12px 32px var(--accent-glow),
+                      0 0 0 1px var(--accent-deep);
+    --accent-lift-lg: 0 18px 56px var(--accent-glow),
+                      0 0 0 1px var(--accent);
+
+
+    /* ============================================================
+       8. MOTION
+       ------------------------------------------------------------
+       Easing follows the "real objects decelerate" rule:
+       expo-out for entrances, quart-out for hovers, linear
+       for the materia pulse (a slow breathing loop).
+       ============================================================ */
+    --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+    --ease-out-expo:  cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-in-out:    cubic-bezier(0.65, 0, 0.35, 1);
+
+    --dur-instant:  80ms;
+    --dur-fast:     160ms;
+    --dur-medium:   280ms;
+    --dur-slow:     520ms;
+    --dur-glacial:  900ms;
+
+    /* Z-index ladder. Centralize so we never play guess-the-stack. */
+    --z-grain:    1;
+    --z-content:  3;
+    --z-sticky:   30;
+    --z-overlay:  60;
+    --z-lightbox: 90;
+
+    /* Sticky offset used by secondary sticky elements (deck-controls) so they
+       pin BELOW the topbar instead of overlapping it. Approximate. */
+    --topbar-stuck-offset: 56px;
+  }
+
+
+  /* ============================================================
+     BRACKET RE-SKIN - body[data-bracket="N"]
+     ------------------------------------------------------------
+     Only --accent-* changes. Neutrals, type, space, motion all
+     hold steady. This is what makes the system theme-able.
+     ============================================================ */
+  body[data-bracket="2"] {
+    --accent:        var(--mako-500);
+    --accent-bright: var(--mako-400);
+    --accent-deep:   var(--mako-700);
+    --accent-rail:   var(--mako-600);
+    --accent-shadow: var(--mako-900);
+  }
+  body[data-bracket="3"] {
+    --accent:        var(--gold-500);
+    --accent-bright: var(--gold-400);
+    --accent-deep:   var(--gold-700);
+    --accent-rail:   var(--gold-600);
+    --accent-shadow: var(--gold-900);
+  }
+  body[data-bracket="4"] {
+    --accent:        var(--rust-500);
+    --accent-bright: var(--rust-400);
+    --accent-deep:   var(--rust-700);
+    --accent-rail:   var(--rust-600);
+    --accent-shadow: var(--rust-900);
+  }
+}

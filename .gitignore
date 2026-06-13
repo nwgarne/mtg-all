@@ -1,0 +1,10 @@
+# Build output + data: regenerated from the Scryfall bulk export by deploy.sh / gen_data.py
+/build/
+/data/
+# built per-year shells (copied from year-template.html at deploy time)
+/[0-9][0-9][0-9][0-9]/
+# bulk inputs
+default-cards.json
+sets-raw.json
+__pycache__/
+*.pyc

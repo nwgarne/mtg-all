@@ -1,0 +1,639 @@
+/* ============================================================
+   CARD TILE - the decklist grid item
+   ------------------------------------------------------------
+   A single MTG card rendering: image on top, name + meta + price.
+   Has four states, all communicated via class on the root:
+
+     .card-tile             - default
+     .card-tile.is-gc       - Game Changer (gold treatment)
+     .card-tile.is-out      - swapped out for this bracket
+     .card-tile.is-in       - swapped in for this bracket
+     .card-tile.is-hidden   - filtered out (display:none)
+
+   Also defines:
+     .deck-grid       - top-level stack of collapsible categories
+     .deck-cat        - one category block (border + collapsible body)
+     .deck-cat-body   - the auto-fit grid of tiles
+     .deck-controls   - sticky filter/search bar over the grid
+     .sb-cluster      - sideboard cluster (variant of deck-cat)
+     .card-lightbox   - fullscreen image preview overlay
+   ============================================================ */
+
+@layer components {
+
+  /* ============================================================
+     DECK CONTROLS - sticky filter bar
+     ============================================================ */
+  .deck-controls {
+    position: sticky;
+    top: var(--topbar-stuck-offset, 56px);
+    z-index: calc(var(--z-sticky) - 1);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-md);
+    margin-bottom: var(--space-md);
+    padding: var(--space-sm) var(--space-sm) var(--space-xs);
+    background: linear-gradient(180deg,
+      var(--ink-000) 80%,
+      color-mix(in oklch, var(--ink-000) 0%, transparent));
+    border-bottom: 1px solid var(--rule-medium);
+    /* Backdrop blur is the lazy reach. We use a hard gradient
+       fade-out instead so it reads as a paper-stack edge. */
+  }
+
+  .deck-controls__summary {
+    flex: 1 1 auto;
+    min-width: 0;
+    text-align: right;
+    font-family: var(--font-mono);
+    font-size: var(--fs-label);
+    letter-spacing: var(--tracking-widest);
+    text-transform: uppercase;
+    color: var(--bone-700);
+    line-height: 1.7;
+  }
+  .deck-controls__summary .sep {
+    color: var(--bone-300);
+    margin: 0 var(--space-2xs);
+  }
+  .deck-controls__summary strong {
+    color: var(--accent);
+    font-weight: var(--fw-body-strong);
+  }
+
+  @media (max-width: 760px) {
+    .deck-controls { gap: var(--space-xs); }
+    .deck-controls__summary {
+      flex-basis: 100%;
+      text-align: left;
+      font-size: 10px;
+      letter-spacing: var(--tracking-wide);
+    }
+  }
+
+
+  /* ============================================================
+     DECK GRID - stack of collapsible categories
+     ============================================================ */
+  .deck-grid {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+  }
+  .deck-grid__loading {
+    margin: var(--space-md) 0;
+    padding: var(--space-md);
+    background: var(--ink-050);
+    border: 1px dashed var(--rule-medium);
+    font-family: var(--font-mono);
+    font-size: var(--fs-label);
+    letter-spacing: var(--tracking-widest);
+    text-transform: uppercase;
+    color: var(--bone-700);
+    text-align: center;
+  }
+
+  .deck-cat {
+    background: var(--ink-100);
+    border: 1px solid var(--rule-medium);
+    border-radius: var(--r-md);
+    overflow: hidden;
+  }
+  /* Standardized collapsible header used by both main-deck categories
+     (.deck-cat__head) and sideboard clusters (.sb-cluster__head). Title
+     grows to fill, count + optional price chip + chevron anchor right.
+     When PRICE_LOCKED the chip span has empty text and :empty hides it
+     so the row does not show a ghost border. */
+  .deck-cat__head,
+  .sb-cluster__head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    padding: var(--space-sm) var(--space-md);
+    background: var(--ink-150);
+    cursor: pointer;
+    user-select: none;
+    color: var(--accent);
+    font-family: var(--font-mono);
+    font-size: var(--fs-label);
+    letter-spacing: var(--tracking-widest);
+    text-transform: uppercase;
+    transition:
+      background var(--dur-fast) var(--ease-out-quart),
+      color var(--dur-fast) var(--ease-out-quart);
+  }
+  .deck-cat__head:hover,
+  .sb-cluster__head:hover {
+    background: var(--ink-100);
+    color: var(--bone-900);
+  }
+  .deck-cat__head:focus-visible,
+  .sb-cluster__head:focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 2px var(--accent);
+  }
+  .deck-cat__title {
+    flex: 1 1 auto;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.25;
+  }
+  .deck-cat__count {
+    flex-shrink: 0;
+    color: var(--bone-700);
+    font-size: var(--fs-label-sm);
+    letter-spacing: var(--tracking-wider);
+  }
+  .deck-cat__total {
+    flex-shrink: 0;
+    padding: 2px 8px;
+    background: oklch(0% 0 0 / 0.25);
+    border: 1px solid var(--rule-strong);
+    border-radius: var(--r-xs);
+    color: var(--accent);
+    font-family: var(--font-mono);
+    font-size: var(--fs-label-sm);
+    letter-spacing: var(--tracking-wider);
+  }
+  .deck-cat__total:empty {
+    display: none;
+  }
+  .deck-cat__chev {
+    flex-shrink: 0;
+    color: var(--accent);
+    font-family: var(--font-mono);
+    font-size: var(--fs-label);
+    transition: transform var(--dur-fast) var(--ease-out-quart);
+  }
+  .deck-cat__chev::before { content: "−"; }
+  .deck-cat.is-collapsed .deck-cat__chev::before,
+  .sb-cluster.is-collapsed .deck-cat__chev::before { content: "+"; }
+
+  .deck-cat__body {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: var(--space-xs);
+    padding: var(--space-xs);
+  }
+  .deck-cat.is-collapsed .deck-cat__body { display: none; }
+
+
+  /* ============================================================
+     CARD TILE - the per-card grid item
+     ============================================================ */
+  .card-tile {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "image image"
+      "meta  price";
+    gap: var(--space-2xs) var(--space-2xs);
+    padding: var(--space-2xs) var(--space-2xs) var(--space-xs);
+    background: var(--ink-000);
+    border: 1px solid var(--rule-medium);
+    border-radius: var(--r-md);
+    transition:
+      background var(--dur-fast) var(--ease-out-quart),
+      border-color var(--dur-fast) var(--ease-out-quart),
+      opacity var(--dur-medium) var(--ease-out-quart),
+      transform var(--dur-medium) var(--ease-out-quart);
+  }
+  .card-tile:hover {
+    background: var(--ink-100);
+    border-color: var(--accent-rail);
+    z-index: 1;
+  }
+
+
+  /* IMAGE - square aspect-ratio'd, clickable, zooms on hover */
+  .card-tile__image {
+    grid-area: image;
+    display: block;
+    width: 100%;
+    aspect-ratio: 488 / 680;
+    position: relative;
+    overflow: hidden;
+    background-color: var(--ink-100);
+    border-radius: var(--r-md);
+    box-shadow: var(--elev-1);
+    cursor: zoom-in;
+    /* Button-reset for the underlying element. */
+    border: 0;
+    padding: 0;
+    margin: 0;
+    font: inherit;
+    color: inherit;
+    text-decoration: none;
+    transition:
+      transform var(--dur-fast) var(--ease-out-quart),
+      box-shadow var(--dur-fast) var(--ease-out-quart);
+  }
+  .card-tile__image:hover {
+    transform: scale(1.03);
+    box-shadow: var(--elev-2),
+                0 0 0 1px var(--accent-deep);
+  }
+  .card-tile__image:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  .card-tile__image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+    display: block;
+    border-radius: inherit;
+  }
+
+
+  /* META */
+  .card-tile__meta {
+    grid-area: meta;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3xs);
+    min-width: 0;
+  }
+  .card-tile__name {
+    font-family: var(--font-headline);
+    font-weight: var(--fw-body-strong);
+    font-size: var(--fs-meta);
+    letter-spacing: var(--tracking-normal);
+    text-transform: uppercase;
+    color: var(--bone-900);
+    line-height: 1.1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .card-tile__sub {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-2xs);
+    font-family: var(--font-mono);
+    font-size: var(--fs-label-sm);
+    letter-spacing: var(--tracking-wider);
+    text-transform: uppercase;
+    color: var(--bone-700);
+  }
+  .card-tile__sub .sep { color: var(--bone-300); }
+  .card-tile__swap-from {
+    margin-top: var(--space-3xs);
+    padding-left: var(--space-2xs);
+    border-left: 1px solid var(--mako-700);
+    font-family: var(--font-mono);
+    font-size: var(--fs-label-sm);
+    letter-spacing: var(--tracking-wider);
+    text-transform: uppercase;
+    color: var(--mako-500);
+  }
+  .card-tile__note {
+    margin-top: var(--space-3xs);
+    font-family: var(--font-body);
+    font-style: italic;
+    font-size: var(--fs-caption);
+    line-height: 1.35;
+    color: var(--bone-700);
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    min-height: calc(3 * 1.35em);
+  }
+
+
+  /* PRICE */
+  .card-tile__price {
+    grid-area: price;
+    align-self: start;
+    text-align: right;
+    white-space: nowrap;
+    font-family: var(--font-mono);
+    font-size: var(--fs-label);
+    letter-spacing: var(--tracking-normal);
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+  }
+  .card-tile__price .lbl {
+    display: block;
+    margin-bottom: var(--space-3xs);
+    font-size: var(--fs-label-sm);
+    letter-spacing: var(--tracking-wider);
+    text-transform: uppercase;
+    color: var(--bone-300);
+  }
+
+
+  /* STATE BADGES - small corner pills */
+  .card-tile__state {
+    position: absolute;
+    top: var(--space-2xs); left: var(--space-2xs);
+    display: none;
+    padding: 2px 6px;
+    border-radius: var(--r-xs);
+    font-family: var(--font-mono);
+    font-size: var(--fs-label-sm);
+    letter-spacing: var(--tracking-wider);
+    text-transform: uppercase;
+    color: var(--accent-ink);
+  }
+  .card-tile.is-out .card-tile__state {
+    display: inline-block;
+    background: var(--status-out);
+  }
+  .card-tile.is-in .card-tile__state {
+    display: inline-block;
+    background: var(--status-in);
+  }
+
+  .card-tile__gc {
+    position: absolute;
+    top: var(--space-2xs); right: var(--space-2xs);
+    display: none;
+  }
+  .card-tile.is-gc .card-tile__gc { display: inline-flex; }
+
+
+  /* ============================================================
+     STATE VARIANTS
+     ============================================================ */
+
+  /* GAME CHANGER - pronounced gold treatment */
+  .card-tile.is-gc {
+    background:
+      linear-gradient(180deg,
+        color-mix(in oklch, var(--gold-500) 32%, transparent),
+        color-mix(in oklch, var(--gold-500) 10%, transparent) 50%,
+        color-mix(in oklch, var(--gold-500) 5%, transparent) 100%),
+      oklch(20% 0.030 80);
+    border: 1px solid var(--gold-500);
+    box-shadow:
+      inset 0 3px 0 0 var(--gold-500),
+      0 0 0 1px color-mix(in oklch, var(--gold-500) 35%, transparent),
+      0 0 18px color-mix(in oklch, var(--gold-500) 20%, transparent);
+  }
+  .card-tile.is-gc .card-tile__name { color: var(--gold-200); }
+  .card-tile.is-gc:hover {
+    border-color: var(--gold-300);
+    box-shadow:
+      inset 0 3px 0 0 var(--gold-300),
+      0 0 0 1px color-mix(in oklch, var(--gold-300) 55%, transparent),
+      0 0 22px color-mix(in oklch, var(--gold-500) 35%, transparent);
+  }
+
+
+  /* SWAPPED OUT - dimmed, grayscale image, strikethrough name */
+  .card-tile.is-out {
+    opacity: 0.58;
+    background:
+      linear-gradient(135deg,
+        color-mix(in oklch, var(--rust-500) 10%, transparent),
+        oklch(0% 0 0 / 0.18) 60%),
+      var(--ink-050);
+    border-color: var(--status-out);
+  }
+  .card-tile.is-out .card-tile__image img {
+    filter: grayscale(85%) brightness(0.7);
+  }
+  .card-tile.is-out .card-tile__name {
+    text-decoration: line-through;
+    text-decoration-color: var(--status-out);
+    color: var(--bone-700);
+  }
+  .card-tile.is-out:hover { opacity: 0.85; }
+
+
+  /* SWAPPED IN - green ring + top stripe */
+  .card-tile.is-in {
+    background:
+      linear-gradient(180deg,
+        color-mix(in oklch, var(--mako-500) 16%, transparent),
+        color-mix(in oklch, var(--mako-500) 3%, transparent) 38%,
+        transparent 100%),
+      var(--ink-000);
+    border-color: var(--mako-700);
+    box-shadow: inset 0 2px 0 0 var(--mako-700);
+  }
+  .card-tile.is-in.is-gc {
+    /* a swapped-in B4 GC: gold trumps green on the top stripe */
+    box-shadow: inset 0 2px 0 0 var(--gold-700);
+  }
+
+  .card-tile.is-hidden { display: none; }
+
+
+  /* ============================================================
+     META AS LINK - clickable meta column
+     ============================================================ */
+  .card-tile a.card-tile__meta {
+    text-decoration: none;
+    color: inherit;
+    cursor: pointer;
+    transition: color var(--dur-fast) var(--ease-out-quart);
+  }
+  .card-tile a.card-tile__meta:hover .card-tile__name {
+    color: var(--accent);
+  }
+  .card-tile a.card-tile__meta:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: var(--r-xs);
+  }
+
+
+  /* ============================================================
+     SIDEBOARD CLUSTER
+     ============================================================ */
+  .sideboard {
+    position: relative;
+    margin-top: var(--space-3xl);
+    padding-top: var(--space-xl);
+    border-top: 1px solid var(--rule-medium);
+  }
+  .sideboard::before {
+    content: "";
+    position: absolute;
+    top: -1px; left: 0;
+    width: 60px; height: 1px;
+    background: var(--accent);
+  }
+  .sideboard__lede {
+    max-width: 64ch;
+    margin: 0 0 var(--space-md);
+    font-family: var(--font-body);
+    font-style: italic;
+    font-size: var(--fs-body);
+    line-height: var(--lh-body);
+    color: var(--bone-700);
+  }
+
+  .sb-cluster {
+    margin: var(--space-sm) 0;
+    background: var(--ink-100);
+    border: 1px solid var(--rule-medium);
+    border-radius: var(--r-md);
+    overflow: hidden;
+  }
+  .sb-cluster.is-collapsed .deck-cat__body { display: none; }
+  /* .sb-cluster__head styling lives in the shared rule above (alongside
+     .deck-cat__head). decklist.js writes deck-cat__title/count/total/chev
+     spans into sideboard heads, so no .sb-cluster__count or .sb-cluster__total
+     styles are needed here. */
+
+
+  /* ============================================================
+     CARD LIGHTBOX
+     ============================================================ */
+  .card-lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-lightbox);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-lg);
+    background: oklch(8% 0.008 95 / 0.92);
+    cursor: zoom-out;
+    animation: card-lightbox-fade 160ms ease-out;
+  }
+  .card-lightbox.is-open { display: flex; }
+  .card-lightbox__inner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    max-width: min(85vw, 540px);
+    max-height: 92vh;
+    cursor: default;
+  }
+  .card-lightbox__inner img {
+    display: block;
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: 92vh;
+    border-radius: var(--r-lg);
+    box-shadow:
+      0 12px 48px oklch(0% 0 0 / 0.7),
+      0 0 0 1px oklch(100% 0 0 / 0.05);
+  }
+  .card-lightbox__close {
+    position: absolute;
+    top: 20px; right: 24px;
+    width: 40px; height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 1px solid oklch(100% 0 0 / 0.4);
+    border-radius: 50%;
+    background: oklch(0% 0 0 / 0.4);
+    color: white;
+    font-size: 28px;
+    line-height: 1;
+    cursor: pointer;
+    transition:
+      background var(--dur-fast) var(--ease-out-quart),
+      transform var(--dur-fast) var(--ease-out-quart);
+  }
+  .card-lightbox__close:hover {
+    background: oklch(100% 0 0 / 0.18);
+    transform: scale(1.08);
+  }
+  .card-lightbox__close:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+  }
+
+  @keyframes card-lightbox-fade {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+
+
+  /* ============================================================
+     RESPONSIVE
+     ============================================================ */
+  @media (max-width: 640px) {
+    .deck-cat__body {
+      grid-template-columns: repeat(2, 1fr);
+      gap: var(--space-2xs);
+      padding: var(--space-2xs);
+    }
+    .card-tile {
+      padding: var(--space-2xs) var(--space-2xs) var(--space-xs);
+    }
+    .card-tile__name {
+      font-size: 0.8125rem;
+      white-space: normal;
+    }
+    .card-tile__note { display: none; }
+    .card-tile__price { font-size: 0.65625rem; }
+    .deck-cat__head, .sb-cluster__head {
+      padding: var(--space-2xs) var(--space-sm);
+      gap: var(--space-2xs);
+      font-size: var(--fs-label-sm);
+      letter-spacing: var(--tracking-wider);
+    }
+    .deck-cat__count {
+      font-size: 0.5625rem; /* 9 */
+      letter-spacing: var(--tracking-wide);
+    }
+    .deck-cat__total {
+      font-size: 0.5625rem;
+      padding: 1px 6px;
+    }
+    .deck-cat__chev { font-size: var(--fs-label-sm); }
+  }
+
+
+  /* ============================================================
+     STATE CROSSFADE - bracket-change swap animation
+     ------------------------------------------------------------
+     Tiles flip between dimmed/grayscale (is-out) and full color
+     (is-in / default) when the user changes brackets. JS toggles
+     the .is-out / .is-in classes; CSS handles the actual fade so
+     the swap reads as earned, not instant.
+     ============================================================ */
+  .card-tile {
+    transition:
+      background var(--dur-fast) var(--ease-out-quart),
+      border-color var(--dur-fast) var(--ease-out-quart),
+      opacity 240ms cubic-bezier(.25, 1, .5, 1),
+      transform var(--dur-medium) var(--ease-out-quart),
+      filter 240ms cubic-bezier(.25, 1, .5, 1);
+  }
+  .card-tile__image img {
+    transition:
+      filter 240ms cubic-bezier(.25, 1, .5, 1),
+      opacity 240ms cubic-bezier(.25, 1, .5, 1);
+  }
+}
+
+
+/* ============================================================
+   REDUCED MOTION
+   ------------------------------------------------------------
+   Honor user preference: kill the bracket-swap crossfade, the
+   topbar dot kick, and the bracket-toggle pill slide. Lives
+   here (card-tile.css) as the shared override block for the
+   decklist + topbar motion adds.
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  .card-tile,
+  .card-tile__image img {
+    transition: none;
+  }
+  .topbar__dot.is-kicking {
+    animation: none;
+  }
+  .bracket-toggle::after {
+    transition: none;
+  }
+}

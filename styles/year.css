@@ -1,0 +1,87 @@
+/* ============================================================
+   mtg-all.dirtyshoulders.com - YEAR PAGE + ACCORDION
+   ------------------------------------------------------------
+   Page-specific styles for /<year>/. The card tiles, the
+   category headers (.deck-cat / .deck-cat__head / .deck-cat__body /
+   .is-collapsed) and the lightbox are all styled by the copied
+   card-tile.css; this file only adds what that file does not:
+   the accordion container spacing, the loading placeholder, and
+   the empty/404 state.
+
+   OWNED BY: year-page agent.
+   Loaded LAST (after mtg-all.css). Layered into `components` so it
+   shares the same cascade layer as global.css / card-tile.css and
+   does not unexpectedly outrank them.
+   ============================================================ */
+
+@layer components {
+
+  /* ============================================================
+     ACCORDION CONTAINER
+     ------------------------------------------------------------
+     The hero owns its own bottom padding; nudge the category stack
+     down so it reads as a distinct block under the stat row. The
+     .deck-grid flex-column + gap and the per-category chrome come
+     from card-tile.css unchanged.
+     ============================================================ */
+  #year-grid {
+    margin-top: var(--space-xl);
+  }
+
+  /* One open category can hold thousands of tiles. Keep the open
+     body from running off into an unbroken wall by giving it a
+     little breathing room under the header; the auto-fill tile
+     grid itself is defined in card-tile.css. */
+  #year-grid .deck-cat__body {
+    align-content: start;
+  }
+
+
+  /* ============================================================
+     LOADING PLACEHOLDER
+     ------------------------------------------------------------
+     Shown in the shell before year.js paints. Mirrors the
+     .deck-grid__loading treatment from card-tile.css so the swap
+     to real content is seamless.
+     ============================================================ */
+  .year-grid__loading {
+    margin: var(--space-xl) 0;
+    padding: var(--space-md);
+    background: var(--ink-050);
+    border: 1px dashed var(--rule-medium);
+    font-family: var(--font-mono);
+    font-size: var(--fs-label);
+    letter-spacing: var(--tracking-widest);
+    text-transform: uppercase;
+    color: var(--bone-700);
+    text-align: center;
+  }
+
+
+  /* ============================================================
+     EMPTY / 404 STATE
+     ------------------------------------------------------------
+     Rendered when the year's data 404s or carries no categories.
+     A friendly line plus a route back to the index.
+     ============================================================ */
+  .year-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-md);
+    margin-top: var(--space-xl);
+    padding: var(--space-xl) var(--space-lg);
+    background: var(--ink-100);
+    border: 1px dashed var(--rule-medium);
+    border-radius: var(--r-md);
+  }
+  .year-empty__msg {
+    margin: 0;
+    font-family: var(--font-headline);
+    font-weight: var(--fw-body-strong);
+    font-size: var(--fs-h3);
+    letter-spacing: var(--tracking-wide);
+    text-transform: uppercase;
+    color: var(--bone-900);
+  }
+}

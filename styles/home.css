@@ -1,0 +1,246 @@
+/* ============================================================
+   mtg-all.dirtyshoulders.com - HOMEPAGE
+   ------------------------------------------------------------
+   The hero + the responsive grid of year cards. Built on the
+   decks tokens / hero / section frame so it reads as the same
+   product. Each year card is a full-bleed cover tile: the
+   year's highest-value card art is the background, a dark
+   gradient keeps the text readable, and it lifts on hover the
+   same way the decks deck-card does.
+   ============================================================ */
+
+@layer components {
+
+  /* ============================================================
+     HERO TAGLINE EXTRAS - the count chip inside the tagline
+     ============================================================ */
+  .hero__tagline strong {
+    color: var(--accent);
+    font-style: normal;
+    font-family: var(--font-mono);
+    font-size: 0.92em;
+    letter-spacing: var(--tracking-wide);
+    font-variant-numeric: tabular-nums;
+  }
+
+
+  /* ============================================================
+     YEAR GRID - responsive grid of year cards, newest first.
+     auto-fill so it reflows from 1 column on phones up to 3-4
+     on wide screens, all tiles the same size.
+     ============================================================ */
+  .year-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
+    gap: var(--space-md);
+    margin: var(--space-xl) 0;
+    align-items: stretch;
+  }
+
+  /* Loading / error placeholder, mirrors deck-grid__loading. */
+  .year-grid__status {
+    grid-column: 1 / -1;
+    margin: var(--space-md) 0;
+    padding: var(--space-md);
+    background: var(--ink-050);
+    border: 1px dashed var(--rule-medium);
+    font-family: var(--font-mono);
+    font-size: var(--fs-label);
+    letter-spacing: var(--tracking-widest);
+    text-transform: uppercase;
+    color: var(--bone-700);
+    text-align: center;
+  }
+
+
+  /* ============================================================
+     YEAR CARD - one year. Full-bleed cover tile.
+     ------------------------------------------------------------
+     Layered background:
+       1. inline style background-image = title card art (cover)
+       2. ::before - dark gradient overlay so the text reads
+       3. content sits on top, anchored to the bottom
+     ============================================================ */
+  .year-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    min-height: 280px;
+    padding: var(--space-md) var(--space-md) var(--space-md);
+    overflow: hidden;
+
+    background-color: var(--ink-100);
+    background-size: cover;
+    background-position: center 22%;
+    background-repeat: no-repeat;
+
+    border: 1px solid var(--rule-medium);
+    border-radius: var(--r-md);
+    text-decoration: none;
+    color: inherit;
+    isolation: isolate;
+    transition:
+      border-color var(--dur-fast) var(--ease-out-quart),
+      transform var(--dur-fast) var(--ease-out-quart),
+      box-shadow var(--dur-fast) var(--ease-out-quart);
+  }
+
+  /* DARK OVERLAY - readable text over any art. Stronger at the
+     bottom where the copy lives, lighter up top so the art shows. */
+  .year-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background:
+      linear-gradient(to top,
+        oklch(8% 0.010 95 / 0.94) 0%,
+        oklch(10% 0.010 95 / 0.78) 34%,
+        oklch(12% 0.010 95 / 0.42) 62%,
+        oklch(14% 0.010 95 / 0.20) 100%);
+    transition: background var(--dur-fast) var(--ease-out-quart);
+  }
+
+  .year-card:hover,
+  .year-card:focus-visible {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+    box-shadow: var(--accent-lift-md);
+    outline: none;
+  }
+  .year-card:hover::before,
+  .year-card:focus-visible::before {
+    background:
+      linear-gradient(to top,
+        oklch(8% 0.010 95 / 0.92) 0%,
+        oklch(10% 0.010 95 / 0.70) 36%,
+        oklch(12% 0.010 95 / 0.34) 66%,
+        color-mix(in oklch, var(--accent) 12%, transparent) 100%);
+  }
+
+  /* PLAIN VARIANT - no title card art for that year. Fall back to
+     a hatched ink panel so it still reads as a card. */
+  .year-card.is-plain {
+    background-image:
+      repeating-linear-gradient(45deg,
+        transparent 0 9px, var(--ink-150) 9px 10px),
+      linear-gradient(180deg, var(--ink-100), var(--ink-050));
+    background-size: auto, auto;
+  }
+  .year-card.is-plain::before {
+    background: linear-gradient(to top,
+      oklch(10% 0.010 95 / 0.70), oklch(14% 0.010 95 / 0.30));
+  }
+
+
+  /* TOP-RIGHT KICKER - set/card count rail at the top, mono. */
+  .year-card__counts {
+    position: absolute;
+    top: var(--space-sm);
+    left: var(--space-md);
+    right: var(--space-md);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2xs);
+    align-items: center;
+
+    font-family: var(--font-mono);
+    font-size: var(--fs-label);
+    letter-spacing: var(--tracking-wider);
+    text-transform: uppercase;
+    color: var(--bone-800);
+    text-shadow: 0 1px 6px oklch(0% 0 0 / 0.8);
+  }
+  .year-card__counts .sep {
+    color: var(--accent);
+  }
+  .year-card__counts strong {
+    color: var(--bone-900);
+    font-weight: var(--fw-body-strong);
+    font-variant-numeric: tabular-nums;
+  }
+
+
+  /* THE YEAR - the big number, the hero of the tile. */
+  .year-card__year {
+    margin: 0;
+    font-family: var(--font-display);
+    font-weight: var(--fw-display-bold);
+    font-size: clamp(3.25rem, 7vw, 4.5rem);
+    line-height: var(--lh-tight);
+    letter-spacing: var(--tracking-tight);
+    color: var(--bone-900);
+    font-variant-numeric: tabular-nums;
+    text-shadow:
+      0 2px 18px oklch(0% 0 0 / 0.75),
+      0 0 40px var(--accent-glow);
+  }
+
+
+  /* CAPTION - "Top: Murktide Regent · $2,300" */
+  .year-card__top {
+    margin-top: var(--space-2xs);
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0 var(--space-2xs);
+
+    font-family: var(--font-mono);
+    font-size: var(--fs-label);
+    letter-spacing: var(--tracking-wide);
+    text-transform: uppercase;
+    color: var(--bone-700);
+    text-shadow: 0 1px 6px oklch(0% 0 0 / 0.85);
+  }
+  .year-card__top-lbl { color: var(--bone-500); }
+  .year-card__top-name {
+    color: var(--bone-900);
+    font-weight: var(--fw-body-strong);
+    /* Keep long card names from blowing out the tile. */
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .year-card__top .sep { color: var(--bone-300); }
+  .year-card__top-price {
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+  }
+
+
+  /* ARROW - bottom-right nubbin, slides on hover (matches deck-card). */
+  .year-card__arrow {
+    position: absolute;
+    bottom: var(--space-sm);
+    right: var(--space-md);
+    z-index: 1;
+    font-family: var(--font-mono);
+    font-size: 1.5rem;
+    line-height: 1;
+    color: var(--accent);
+    text-shadow: 0 1px 8px oklch(0% 0 0 / 0.85);
+    transition: transform var(--dur-fast) var(--ease-out-quart);
+  }
+  .year-card:hover .year-card__arrow,
+  .year-card:focus-visible .year-card__arrow {
+    transform: translateX(5px);
+  }
+
+
+  @media (max-width: 520px) {
+    .year-card {
+      min-height: 220px;
+      padding: var(--space-sm);
+    }
+    .year-card__counts {
+      left: var(--space-sm);
+      right: var(--space-sm);
+      font-size: var(--fs-label-sm);
+      letter-spacing: var(--tracking-wide);
+    }
+    .year-card__year { font-size: clamp(2.75rem, 16vw, 3.75rem); }
+    .year-card__arrow { right: var(--space-sm); }
+  }
+}

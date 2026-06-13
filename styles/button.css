@@ -1,0 +1,131 @@
+/* ============================================================
+   BUTTON
+   ------------------------------------------------------------
+   Three variants:
+     .btn               - default / ghost (outlined)
+     .btn.is-primary    - solid accent
+     .btn.is-link       - inline text-link affordance
+
+   Plus sizes: .btn--sm / .btn--md (default) / .btn--lg
+   ============================================================ */
+
+@layer components {
+
+  .btn {
+    /* layout */
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs);
+    padding: 0.6em 1.4em;
+    border: 1px solid var(--accent-deep);
+    background: transparent;
+    color: var(--bone-900);
+    cursor: pointer;
+    text-decoration: none;
+
+    /* type */
+    font-family: var(--font-mono);
+    font-size: var(--fs-label);
+    letter-spacing: var(--tracking-widest);
+    text-transform: uppercase;
+    line-height: 1;
+    font-weight: var(--fw-body-strong);
+
+    /* shape */
+    border-radius: var(--r-xs);
+
+    /* motion */
+    transition:
+      background var(--dur-fast) var(--ease-out-quart),
+      color var(--dur-fast) var(--ease-out-quart),
+      border-color var(--dur-fast) var(--ease-out-quart),
+      transform var(--dur-fast) var(--ease-out-quart),
+      box-shadow var(--dur-fast) var(--ease-out-quart);
+  }
+
+  .btn:hover,
+  .btn:focus-visible {
+    background: var(--accent);
+    color: var(--accent-ink);
+    border-color: var(--accent);
+    outline: none;
+    transform: translateY(-1px);
+    box-shadow: var(--accent-lift-sm);
+  }
+
+  .btn:active {
+    transform: translateY(0);
+    box-shadow: none;
+  }
+
+  /* The arrow nubbin. Decorative; if used, the markup includes
+     <span class="btn__arrow">&rsaquo;</span>. */
+  .btn__arrow {
+    display: inline-block;
+    transition: transform var(--dur-fast) var(--ease-out-quart);
+  }
+  .btn:hover .btn__arrow,
+  .btn:focus-visible .btn__arrow { transform: translateX(3px); }
+
+
+  /* ============================================================
+     VARIANTS
+     ============================================================ */
+  .btn.is-primary {
+    background: var(--accent);
+    color: var(--accent-ink);
+    border-color: var(--accent);
+  }
+  .btn.is-primary:hover,
+  .btn.is-primary:focus-visible {
+    background: var(--accent-bright);
+    border-color: var(--accent-bright);
+    color: var(--accent-ink);
+    box-shadow: var(--accent-lift-md);
+  }
+
+  .btn.is-link {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--accent);
+    text-transform: uppercase;
+    border-bottom: 1px solid transparent;
+    border-radius: 0;
+  }
+  .btn.is-link:hover,
+  .btn.is-link:focus-visible {
+    background: transparent;
+    color: var(--bone-900);
+    border-bottom-color: var(--accent);
+    transform: none;
+    box-shadow: none;
+  }
+
+
+  /* ============================================================
+     SIZES
+     ============================================================ */
+  .btn--sm {
+    padding: 0.45em 1.1em;
+    font-size: var(--fs-label-sm);
+    letter-spacing: var(--tracking-wider);
+  }
+  .btn--lg {
+    padding: 0.8em 1.7em;
+    font-size: var(--fs-body-sm);
+    letter-spacing: var(--tracking-wide);
+  }
+
+
+  /* ============================================================
+     DISABLED
+     ============================================================ */
+  .btn:disabled,
+  .btn[aria-disabled="true"] {
+    opacity: 0.45;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+  }
+}

@@ -1,0 +1,631 @@
+/* ============================================================
+   HERO + SECTION FRAME + DECK INDEX
+   ------------------------------------------------------------
+   Three layouts:
+
+     .hero                 - default centered hero (bracket page)
+                             headline + tagline + stat-row + big-idea
+     .hero.is-split        - asymmetric: tight left + full-bleed art right
+                             used on deck home + landing page
+     .hero.is-readout      - tournament + decklist: condensed, no big-idea
+
+   Plus:
+     section + section__num + section__title  - uniform section frame
+     .deck-index           - landing page grid of deck tiles
+     .deck-card            - one deck on the landing page
+     .continue             - cross-page reading-flow grid at page end
+   ============================================================ */
+
+@layer components {
+
+  /* ============================================================
+     HERO - base
+     ------------------------------------------------------------
+     Padding: 56px → 96px on desktop, breathes generously.
+     ============================================================ */
+  .hero {
+    position: relative;
+    z-index: 1;
+    padding: var(--space-2xl) 0 var(--space-xl);
+  }
+
+
+  /* ============================================================
+     HERO ART - the Cloud splash, masked into the right edge
+     ------------------------------------------------------------
+     Original site used a soft radial mask. We replace with a hard
+     diagonal gradient mask so the art reads as an editorial photo
+     bleed, not a generic glow. Per-bracket filter tweaks (B4 hue
+     rotates -10deg for a hotter red, B2 desaturates 10% so green
+     pages don't fight the art).
+     ============================================================ */
+  .hero__art {
+    position: absolute;
+    top: var(--space-xl);
+    right: calc(50% - 670px);
+    width: 560px;
+    height: 560px;
+    max-width: 80vw;
+    max-height: 80vw;
+    background-size: cover;
+    background-position: center 30%;
+    opacity: 0.16;
+    pointer-events: none;
+    z-index: 0;
+    filter: saturate(0.9) contrast(0.95);
+    -webkit-mask-image: radial-gradient(ellipse at center,
+                          black 38%, transparent 72%);
+            mask-image: radial-gradient(ellipse at center,
+                          black 38%, transparent 72%);
+  }
+  body[data-bracket="2"] .hero__art {
+    filter: saturate(0.85) contrast(0.95) hue-rotate(8deg);
+    opacity: 0.14;
+  }
+  body[data-bracket="3"] .hero__art {
+    filter: saturate(1.0) contrast(1.0);
+    opacity: 0.18;
+  }
+  body[data-bracket="4"] .hero__art {
+    filter: saturate(1.15) contrast(1.05) hue-rotate(-10deg);
+    opacity: 0.20;
+  }
+
+
+  /* READOUT HERO - tournament + decklist: condensed top padding,
+     leaves the stat-row to do the heavy lifting. */
+  .hero.is-readout {
+    padding-top: var(--space-xl);
+    padding-bottom: var(--space-lg);
+  }
+  .hero.is-readout .hero__title {
+    margin-bottom: var(--space-sm);
+  }
+
+
+  /* SPLIT HERO ART - used in .hero.is-split layout. Hard-edge
+     bleed off the right side, no soft mask. */
+  .hero.is-split .hero__art {
+    position: absolute;
+    top: 0; right: 0;
+    width: clamp(280px, 42vw, 640px);
+    height: 100%;
+    max-width: none;
+    max-height: none;
+    opacity: 0.28;
+    -webkit-mask-image: linear-gradient(to left,
+      black 30%, transparent 100%);
+            mask-image: linear-gradient(to left,
+      black 30%, transparent 100%);
+  }
+
+
+  @media (max-width: 820px) {
+    .hero__art {
+      width: 360px; height: 360px;
+      right: -20px; top: 80px;
+      opacity: 0.15;
+    }
+    .hero.is-split .hero__art {
+      width: 280px; height: 280px;
+      opacity: 0.18;
+    }
+  }
+  @media (max-width: 520px) {
+    .hero__art {
+      width: 240px; height: 240px;
+      right: -10px; top: 60px;
+      opacity: 0.18;
+    }
+  }
+
+
+  /* ============================================================
+     KICKER - small mono caption above h1
+     ============================================================ */
+  .hero__kicker {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    margin-bottom: var(--space-md);
+
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    letter-spacing: var(--tracking-mega);
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  .hero__kicker::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(to right, var(--accent-deep), transparent);
+  }
+
+
+  /* ============================================================
+     HEADLINE - h1
+     ------------------------------------------------------------
+     Three-element composition:
+       .h1 / .hero__title
+         <span class="hero__title-stroke">LIMIT</span>       (outlined glyph)
+         <span>BREAK
+           <span class="hero__title-accent">at 7+ power.</span>
+         </span>
+
+     The stroke variant is unfilled bone strokes. The accent
+     variant is a small italic serif sub-clause that hangs off
+     the headline like a movie-poster tagline.
+     ============================================================ */
+  .hero__title {
+    margin: 0 0 var(--space-md);
+    font-family: var(--font-display);
+    font-weight: var(--fw-display-bold);
+    font-size: var(--fs-hero);
+    line-height: var(--lh-tight);
+    letter-spacing: var(--tracking-tight);
+    color: var(--bone-900);
+    text-transform: uppercase;
+    text-shadow:
+      0 0 60px var(--accent-glow),
+      0 2px 30px oklch(0% 0 0 / 0.5);
+  }
+  .hero__title-stroke {
+    -webkit-text-stroke: 1.5px var(--bone-900);
+    color: transparent;
+    font-weight: var(--fw-display-light);
+  }
+  .hero__title-accent {
+    display: inline-block;
+    margin-left: 0.1em;
+    transform: translateY(-0.15em);
+    font-family: var(--font-body);
+    font-style: italic;
+    font-weight: var(--fw-body-strong);
+    font-size: 0.55em;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--accent);
+  }
+
+
+  /* Mega title for landing page. */
+  .hero__title--mega {
+    font-size: var(--fs-mega);
+  }
+
+
+  /* ============================================================
+     TAGLINE - italic serif lead paragraph
+     ============================================================ */
+  .hero__tagline {
+    max-width: 64ch;
+    margin: 0;
+    font-family: var(--font-body);
+    font-style: italic;
+    font-size: var(--fs-lead);
+    line-height: 1.5;
+    color: var(--bone-700);
+  }
+  .hero__tagline a {
+    color: var(--accent);
+    text-decoration: underline;
+    text-decoration-color: var(--accent-deep);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+  }
+  .hero__tagline a:hover {
+    color: var(--bone-900);
+    text-decoration-color: var(--accent);
+  }
+
+
+  /* ============================================================
+     SECTION FRAME - uniform across all pages
+     ------------------------------------------------------------
+     Section break = 96px top padding + a 1px rule + a 60px
+     accent stub anchored to the rule's top-left corner.
+     ============================================================ */
+  section {
+    position: relative;
+    padding: var(--space-3xl) 0 var(--space-sm);
+    border-top: 1px solid var(--rule-medium);
+    scroll-margin-top: 60px;
+  }
+  section::before {
+    content: "";
+    position: absolute;
+    top: -1px; left: 0;
+    width: 60px;
+    height: 1px;
+    background: var(--accent);
+  }
+  /* The hero section itself is the page top - no rule. */
+  section.hero {
+    padding-top: var(--space-2xl);
+    border-top: 0;
+  }
+  section.hero::before { display: none; }
+
+
+  /* SECTION NUMBER - the "00 // The thesis" label */
+  .section__num {
+    display: block;
+    margin-bottom: var(--space-sm);
+    font-family: var(--font-mono);
+    font-size: var(--fs-label);
+    letter-spacing: var(--tracking-mega);
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+
+  /* SECTION TITLE - h2 */
+  .section__title,
+  h2 {
+    max-width: 820px;
+    margin: 0 0 var(--space-md);
+    font-family: var(--font-display);
+    font-weight: var(--fw-display-bold);
+    font-size: var(--fs-h2);
+    line-height: var(--lh-display);
+    letter-spacing: var(--tracking-normal);
+    text-transform: uppercase;
+    color: var(--bone-900);
+  }
+  .section__title em,
+  h2 em {
+    font-family: var(--font-body);
+    font-style: italic;
+    font-weight: var(--fw-body-regular);
+    color: var(--accent);
+    text-transform: none;
+    letter-spacing: var(--tracking-tight);
+  }
+
+
+  /* SECTION SUBHEAD - h3, label-style */
+  h3 {
+    margin: var(--space-lg) 0 var(--space-xs);
+    padding-bottom: var(--space-2xs);
+    border-bottom: 1px dashed var(--rule-medium);
+    font-family: var(--font-headline);
+    font-weight: var(--fw-body-strong);
+    font-size: var(--fs-h3);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-wide);
+    color: var(--bone-900);
+  }
+
+
+  /* ============================================================
+     DECK INDEX - landing page grid of deck tiles
+     ------------------------------------------------------------
+     Used on /index - once we have >1 deck, this is where they
+     live. Asymmetric grid: featured deck spans 2 columns on
+     wide screens.
+     ============================================================ */
+  .deck-index {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(380px, 100%), 1fr));
+    gap: var(--space-md);
+    margin: var(--space-xl) 0;
+    align-items: stretch;
+  }
+
+
+  /* ============================================================
+     DECK CARD - one deck on the landing page
+     Horizontal layout: commander image left, content right.
+     All cards same size (no featured / non-featured asymmetry).
+     ============================================================ */
+  .deck-card {
+    position: relative;
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    gap: 0;
+    min-height: 240px;
+    background: var(--ink-050);
+    border: 1px solid var(--rule-medium);
+    overflow: hidden;
+    text-decoration: none;
+    color: inherit;
+    transition:
+      border-color var(--dur-fast) var(--ease-out-quart),
+      transform var(--dur-fast) var(--ease-out-quart),
+      box-shadow var(--dur-fast) var(--ease-out-quart);
+  }
+  .deck-card:hover,
+  .deck-card:focus-visible {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+    box-shadow: var(--accent-lift-md);
+    outline: none;
+  }
+
+  /* Commander image panel — left edge of every card */
+  .deck-card__image-wrap {
+    position: relative;
+    background: var(--ink-100);
+    overflow: hidden;
+    border-right: 1px solid var(--rule-medium);
+  }
+  .deck-card__image {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center 30%;
+    display: block;
+    transition: transform var(--dur-medium) var(--ease-out-quart),
+                filter var(--dur-medium) var(--ease-out-quart);
+    filter: saturate(0.85);
+  }
+  .deck-card:hover .deck-card__image,
+  .deck-card:focus-visible .deck-card__image {
+    transform: scale(1.05);
+    filter: saturate(1.0);
+  }
+  .deck-card__image--placeholder {
+    background:
+      repeating-linear-gradient(45deg, transparent 0 8px, var(--ink-200) 8px 9px),
+      var(--ink-100);
+  }
+  /* Subtle gradient fade where the image meets the content panel */
+  .deck-card__image-wrap::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to right, transparent 60%, var(--ink-050) 100%);
+    pointer-events: none;
+  }
+
+  /* Content body */
+  .deck-card__body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+    padding: var(--space-md) var(--space-lg);
+    min-width: 0;
+  }
+  .deck-card__body .deck-card__tagline {
+    margin-top: auto;
+  }
+
+  @media (max-width: 520px) {
+    .deck-card {
+      grid-template-columns: 1fr;
+      grid-template-rows: 140px auto;
+      min-height: 0;
+    }
+    .deck-card__image-wrap {
+      border-right: none;
+      border-bottom: 1px solid var(--rule-medium);
+    }
+    .deck-card__image-wrap::after {
+      background: linear-gradient(to bottom, transparent 60%, var(--ink-050) 100%);
+    }
+  }
+
+  .deck-card__kicker {
+    font-family: var(--font-mono);
+    font-size: var(--fs-label);
+    letter-spacing: var(--tracking-mega);
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  .deck-card__title {
+    margin: 0;
+    font-family: var(--font-display);
+    font-weight: var(--fw-display-bold);
+    font-size: clamp(2rem, 3.5vw, 3rem);
+    line-height: var(--lh-tight);
+    letter-spacing: var(--tracking-tight);
+    text-transform: uppercase;
+    color: var(--bone-900);
+  }
+  .deck-card__title em {
+    font-family: var(--font-body);
+    font-style: italic;
+    font-weight: var(--fw-body-regular);
+    font-size: 0.55em;
+    color: var(--accent);
+    text-transform: none;
+    margin-left: 0.1em;
+    display: inline-block;
+    transform: translateY(-0.15em);
+  }
+  .deck-card__tagline {
+    max-width: 36ch;
+    margin: 0;
+    font-family: var(--font-body);
+    font-style: italic;
+    font-size: var(--fs-body-sm);
+    line-height: 1.5;
+    color: var(--bone-700);
+  }
+  .deck-card__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-md);
+    margin-top: var(--space-xs);
+    font-family: var(--font-mono);
+    font-size: var(--fs-label-sm);
+    letter-spacing: var(--tracking-wider);
+    text-transform: uppercase;
+    color: var(--bone-700);
+  }
+  .deck-card__meta strong {
+    display: block;
+    margin-top: 2px;
+    color: var(--bone-900);
+    font-family: var(--font-display);
+    font-weight: var(--fw-display-bold);
+    font-size: 1.25rem;
+    letter-spacing: var(--tracking-tight);
+    font-variant-numeric: tabular-nums;
+  }
+  .deck-card__meta em {
+    color: var(--accent);
+    font-style: italic;
+    font-family: var(--font-body);
+    font-size: 0.85em;
+    margin-left: 4px;
+  }
+  .deck-card__arrow {
+    position: absolute;
+    top: var(--space-md); right: var(--space-md);
+    z-index: 2;
+    font-family: var(--font-mono);
+    font-size: 1.5rem;
+    line-height: 1;
+    color: var(--accent);
+    transition: transform var(--dur-fast) var(--ease-out-quart);
+  }
+  .deck-card:hover .deck-card__arrow,
+  .deck-card:focus-visible .deck-card__arrow {
+    transform: translateX(5px);
+  }
+
+
+  /* COMING SOON deck-card variant - placeholder card for future decks. */
+  .deck-card.is-locked {
+    border-style: dashed;
+    pointer-events: none;
+  }
+  .deck-card.is-locked .deck-card__title,
+  .deck-card.is-locked .deck-card__tagline {
+    color: var(--bone-500);
+  }
+  .deck-card.is-locked .deck-card__arrow { opacity: 0.4; }
+
+
+  /* ============================================================
+     CONTINUE - cross-page next-step grid at the bottom of a page
+     ============================================================ */
+  .continue {
+    position: relative;
+    margin-top: var(--space-3xl);
+    padding-top: var(--space-xl);
+    border-top: 1px solid var(--rule-medium);
+  }
+  .continue::before {
+    content: "";
+    position: absolute;
+    top: -1px; left: 0;
+    width: 60px; height: 1px;
+    background: var(--accent);
+  }
+  .continue .section__num { margin-bottom: var(--space-md); }
+  .continue__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: var(--space-sm);
+  }
+  .continue-card {
+    display: block;
+    position: relative;
+    padding: var(--space-md) var(--space-lg) var(--space-md);
+    background: var(--ink-100);
+    border: 1px solid var(--rule-medium);
+    text-decoration: none;
+    color: var(--bone-900);
+    transition:
+      border-color var(--dur-fast) var(--ease-out-quart),
+      transform var(--dur-fast) var(--ease-out-quart),
+      box-shadow var(--dur-fast) var(--ease-out-quart);
+  }
+  .continue-card:hover,
+  .continue-card:focus-visible {
+    border-color: var(--accent-deep);
+    transform: translateY(-2px);
+    box-shadow: var(--accent-lift-sm);
+    outline: none;
+  }
+  .continue-card::after {
+    content: "\203A";
+    position: absolute;
+    top: var(--space-sm); right: var(--space-md);
+    color: var(--accent);
+    font-size: 1.375rem;
+    line-height: 1;
+    font-family: var(--font-mono);
+    transition: transform var(--dur-fast) var(--ease-out-quart);
+  }
+  .continue-card:hover::after,
+  .continue-card:focus-visible::after { transform: translateX(5px); }
+
+  .continue-card__kicker {
+    margin-bottom: var(--space-2xs);
+    font-family: var(--font-mono);
+    font-size: var(--fs-label-sm);
+    letter-spacing: var(--tracking-mega);
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  .continue-card__title {
+    margin-bottom: var(--space-2xs);
+    font-family: var(--font-headline);
+    font-weight: var(--fw-body-strong);
+    font-size: 1.375rem;
+    letter-spacing: var(--tracking-normal);
+    text-transform: uppercase;
+    color: var(--bone-900);
+  }
+  .continue-card__body {
+    margin: 0;
+    max-width: 40ch;
+    font-family: var(--font-body);
+    font-style: italic;
+    font-size: var(--fs-body-sm);
+    line-height: 1.5;
+    color: var(--bone-700);
+  }
+
+
+  /* ============================================================
+     FOOTER + SWORD MARK
+     ============================================================ */
+  .site-footer {
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--space-xs);
+    margin-top: var(--space-3xl);
+    padding-top: var(--space-md);
+    border-top: 1px solid var(--rule-medium);
+    position: relative;
+
+    font-family: var(--font-mono);
+    font-size: var(--fs-label-sm);
+    letter-spacing: var(--tracking-widest);
+    text-transform: uppercase;
+    color: var(--bone-700);
+  }
+
+  .site-footer__home {
+    color: var(--bone-800);
+    text-decoration-color: var(--rule-medium);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+  }
+  .site-footer__home:hover,
+  .site-footer__home:focus-visible {
+    color: var(--accent);
+    text-decoration-color: var(--accent);
+  }
+
+  .sword-mark {
+    position: absolute;
+    right: 0;
+    top: -96px;
+    width: 36px;
+    height: 152px;
+    color: var(--accent);
+    opacity: 0.24;
+    pointer-events: none;
+    filter: drop-shadow(0 0 10px var(--accent-soft));
+  }
+  .sword-mark svg { width: 100%; height: 100%; display: block; }
+}

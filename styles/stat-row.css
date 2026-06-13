@@ -1,0 +1,353 @@
+/* ============================================================
+   STAT ROW - hero stats, mana base cells, compliance rows, swaps
+   ------------------------------------------------------------
+   Family of label/value display widgets. All share:
+     - mono uppercase label
+     - display-font value with optional italic serif modifier
+     - ink-on-rule grid construction (1px gap on a rule
+       background gives perfect hairline cell dividers without
+       border-collapse hell)
+   ============================================================ */
+
+@layer components {
+
+  /* ============================================================
+     HERO STATS - the bracket badge row under the hero
+     ============================================================ */
+  .stat-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 1px;
+    margin: var(--space-lg) 0 0;
+    background: var(--rule-medium);
+    border: 1px solid var(--rule-medium);
+  }
+
+  .stat-row__cell {
+    background: var(--ink-000);
+    padding: var(--space-sm) var(--space-md);
+  }
+
+  .stat-row__label {
+    display: block;
+    margin-bottom: var(--space-3xs);
+    font-family: var(--font-mono);
+    font-size: var(--fs-label-sm);
+    letter-spacing: var(--tracking-widest);
+    text-transform: uppercase;
+    color: var(--bone-700);
+  }
+
+  .stat-row__value {
+    font-family: var(--font-display);
+    font-weight: var(--fw-display-bold);
+    font-size: 1.5rem;
+    letter-spacing: var(--tracking-tight);
+    line-height: 1;
+    color: var(--bone-900);
+    text-transform: uppercase;
+    /* Tabular figures so stats line up across columns. */
+    font-variant-numeric: tabular-nums;
+  }
+
+  .stat-row__value em {
+    font-family: var(--font-body);
+    font-style: italic;
+    font-weight: var(--fw-body-regular);
+    color: var(--accent);
+    text-transform: none;
+    font-size: 0.7em;
+    letter-spacing: 0;
+    margin-left: var(--space-3xs);
+  }
+
+
+  /* ============================================================
+     MANA BASE - same architecture, smaller cell + bigger number
+     ============================================================ */
+  .mana-base {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 1px;
+    margin: var(--space-md) 0;
+    background: var(--rule-medium);
+    border: 1px solid var(--rule-medium);
+  }
+  .mana-base__cell {
+    background: var(--ink-000);
+    padding: var(--space-sm) var(--space-md);
+  }
+  .mana-base__key {
+    display: block;
+    margin-bottom: var(--space-3xs);
+    font-family: var(--font-mono);
+    font-size: var(--fs-label-sm);
+    letter-spacing: var(--tracking-widest);
+    text-transform: uppercase;
+    color: var(--bone-700);
+  }
+  .mana-base__val {
+    font-family: var(--font-display);
+    font-weight: var(--fw-display-bold);
+    font-size: 1.6rem;
+    line-height: 1;
+    color: var(--bone-900);
+    font-variant-numeric: tabular-nums;
+  }
+  .mana-base__val em {
+    font-family: var(--font-body);
+    font-style: italic;
+    font-weight: var(--fw-body-regular);
+    color: var(--accent);
+    font-size: 0.65em;
+    margin-left: var(--space-3xs);
+  }
+
+
+  /* ============================================================
+     COMPLIANCE - two-column key/value rows
+     ------------------------------------------------------------
+     Used on tournament pages to declare bracket-legality facts.
+     Architecture: a 220px label rail + flowing value column.
+     ============================================================ */
+  .compliance {
+    display: grid;
+    gap: 0;
+    margin: var(--space-md) 0;
+    border-top: 1px solid var(--rule-medium);
+    border-bottom: 1px solid var(--rule-medium);
+  }
+  .compliance__row {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: var(--space-md);
+    padding: var(--space-sm) 0;
+    border-bottom: 1px solid var(--rule-medium);
+    align-items: baseline;
+  }
+  .compliance__row:last-child { border-bottom: none; }
+  .compliance__label {
+    font-family: var(--font-mono);
+    font-size: var(--fs-label);
+    letter-spacing: var(--tracking-widest);
+    text-transform: uppercase;
+    color: var(--bone-700);
+  }
+  .compliance__value {
+    color: var(--bone-900);
+    font-size: var(--fs-body);
+    line-height: 1.55;
+  }
+  .compliance__value .check {
+    color: var(--status-in);
+    font-weight: var(--fw-body-strong);
+  }
+  .compliance__value .x {
+    color: var(--status-out);
+    font-weight: var(--fw-body-strong);
+  }
+  .compliance__value strong { color: var(--accent); }
+
+  @media (max-width: 640px) {
+    .compliance__row {
+      grid-template-columns: 1fr;
+      gap: var(--space-3xs);
+      padding: var(--space-xs) 0;
+    }
+  }
+
+
+  /* ============================================================
+     SWAP ROW - out → in side-by-side card swap
+     ============================================================ */
+  .swap-list {
+    display: grid;
+    gap: var(--space-xs);
+    margin: var(--space-md) 0;
+  }
+  .swap-row {
+    display: grid;
+    grid-template-columns: 1fr 36px 1fr;
+    align-items: center;
+    background: var(--ink-100);
+    border: 1px solid var(--rule-medium);
+  }
+  .swap-row__side {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3xs);
+    padding: var(--space-sm) var(--space-md);
+  }
+  .swap-row__side.is-out { border-right: 1px dashed var(--rule-medium); }
+  .swap-row__label {
+    font-family: var(--font-mono);
+    font-size: var(--fs-label-sm);
+    letter-spacing: var(--tracking-widest);
+    text-transform: uppercase;
+    color: var(--bone-700);
+  }
+  .swap-row__side.is-out .swap-row__label { color: var(--status-out); }
+  .swap-row__side.is-in .swap-row__label { color: var(--accent); }
+  .swap-row__name {
+    font-family: var(--font-headline);
+    font-weight: var(--fw-body-strong);
+    font-size: 1.0625rem;
+    letter-spacing: var(--tracking-normal);
+    text-transform: uppercase;
+    color: var(--bone-900);
+  }
+  .swap-row__side.is-out .swap-row__name {
+    text-decoration: line-through;
+    text-decoration-color: var(--status-out);
+    color: var(--bone-700);
+  }
+  .swap-row__arrow {
+    text-align: center;
+    color: var(--accent);
+    font-family: var(--font-mono);
+    font-size: 1.125rem;
+  }
+  .swap-row__reason {
+    grid-column: 1 / -1;
+    padding: var(--space-xs) var(--space-md) var(--space-sm);
+    border-top: 1px dashed var(--rule-medium);
+    font-style: italic;
+    font-size: var(--fs-meta);
+    color: var(--bone-700);
+  }
+  @media (max-width: 640px) {
+    .swap-row { grid-template-columns: 1fr; }
+    .swap-row__side.is-out {
+      border-right: none;
+      border-bottom: 1px dashed var(--rule-medium);
+    }
+    .swap-row__arrow { display: none; }
+  }
+
+
+  /* ============================================================
+     TURN TIMELINE - the curve, turn by turn
+     ============================================================ */
+  .timeline {
+    display: grid;
+    gap: var(--space-xs);
+    margin: var(--space-md) 0 var(--space-sm);
+  }
+  .turn {
+    display: grid;
+    grid-template-columns: 110px 1fr;
+    gap: var(--space-md);
+    padding: var(--space-md) 0;
+    border-top: 1px solid var(--rule-medium);
+    align-items: baseline;
+  }
+  .turn:last-child { border-bottom: 1px solid var(--rule-medium); }
+  .turn__when {
+    font-family: var(--font-display);
+    font-weight: var(--fw-display-bold);
+    font-size: 1.625rem;
+    color: var(--accent);
+    letter-spacing: var(--tracking-tight);
+    text-transform: uppercase;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .turn__when small {
+    display: block;
+    margin-top: var(--space-2xs);
+    font-family: var(--font-mono);
+    font-size: var(--fs-label-sm);
+    letter-spacing: var(--tracking-wider);
+    color: var(--bone-700);
+    font-weight: var(--fw-body-regular);
+  }
+  .turn__what {
+    font-size: var(--fs-body);
+    line-height: var(--lh-body);
+    color: var(--bone-900);
+  }
+  .turn__what strong {
+    color: var(--accent);
+    font-weight: var(--fw-body-strong);
+  }
+  .turn__what .why {
+    display: block;
+    margin-top: var(--space-2xs);
+    font-style: italic;
+    color: var(--bone-700);
+    font-size: var(--fs-meta);
+  }
+  @media (max-width: 640px) {
+    .turn { grid-template-columns: 1fr; gap: var(--space-3xs); }
+    .turn__when { font-size: 1.25rem; }
+  }
+
+
+  /* ============================================================
+     GC PILL - Game Changer marker (always gold, every bracket)
+     ============================================================ */
+  .gc-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-3xs);
+    padding: 2px 8px;
+    vertical-align: middle;
+    white-space: nowrap;
+    background: var(--status-gc);
+    color: var(--accent-ink);
+    border-radius: var(--r-xs);
+    font-family: var(--font-mono);
+    font-size: var(--fs-label-sm);
+    letter-spacing: var(--tracking-wider);
+    text-transform: uppercase;
+    font-weight: var(--fw-body-strong);
+  }
+  .gc-pill::before {
+    content: "\2605";
+    font-size: 10px;
+    line-height: 1;
+  }
+
+
+  /* ============================================================
+     BRACKET BANNER - the bracket-tier strip above the play guide
+     ============================================================ */
+  .bracket-banner {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    flex-wrap: wrap;
+    margin-bottom: var(--space-md);
+    padding: var(--space-sm) var(--space-md);
+    background: var(--ink-100);
+    border: 1px solid var(--accent);
+    /* The original used a 4px left border. Replaced with a
+       solid full-perimeter accent border to avoid the
+       AI side-stripe pattern; intent (this is a bracket-tier
+       readout) is preserved by the full-border + label tab. */
+  }
+  .bracket-banner__pill {
+    padding: var(--space-3xs) var(--space-2xs);
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-family: var(--font-mono);
+    font-size: var(--fs-label-sm);
+    letter-spacing: var(--tracking-widest);
+    text-transform: uppercase;
+    font-weight: var(--fw-body-strong);
+  }
+  .bracket-banner__label {
+    font-family: var(--font-body);
+    font-style: italic;
+    font-size: var(--fs-meta);
+    color: var(--bone-900);
+  }
+  .bracket-banner__meta {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: var(--fs-label-sm);
+    letter-spacing: var(--tracking-widest);
+    text-transform: uppercase;
+    color: var(--bone-700);
+  }
+}

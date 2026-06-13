@@ -1,0 +1,50 @@
+# mtg-all.dirtyshoulders.com - add to /etc/caddy/Caddyfile.d/dirtyshoulders.caddy
+#
+# Pre-create the log file FIRST or Caddy fails to start (and takes down all sites):
+#   sudo install -o caddy -g caddy -m 644 /dev/null /var/log/caddy/dirtyshoulders-mtg-all.log
+# Then: sudo systemctl reload caddy
+#
+# TLS issues automatically via caddy01's global Cloudflare DNS-01; the *.dirtyshoulders.com
+# wildcard already resolves. No auth gate, no price gating (unlike the decks site).
+
+mtg-all.dirtyshoulders.com {
+    root * /srv/www/dirtyshoulders-mtg-all
+    file_server {
+        index index.html
+    }
+
+    encode gzip zstd
+
+    @static path *.woff2 *.woff *.png *.jpg *.jpeg *.svg
+    header @static Cache-Control "public, max-age=31536000, immutable"
+
+    @json path *.json
+    header @json Cache-Control "public, max-age=600, must-revalidate"
+
+    @html {
+        path / *.html
+        path */
+    }
+    header @html Cache-Control "public, max-age=300"
+
+    @assets path *.js *.css
+    header @assets Cache-Control "no-cache, must-revalidate"
+
+    header {
+        X-Frame-Options "SAMEORIGIN"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "geolocation=(), microphone=(), camera=()"
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        Content-Security-Policy "default-src 'self'; img-src 'self' data: https://cards.scryfall.io https://svgs.scryfall.io; font-src 'self' data: https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self'; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'"
+        -Server
+    }
+
+    log {
+        output file /var/log/caddy/dirtyshoulders-mtg-all.log {
+            roll_size 10mb
+            roll_keep 5
+        }
+        format console
+    }
+}
