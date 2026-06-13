@@ -28,19 +28,24 @@ def fval(s):
     except (TypeError, ValueError): return 0.0
 
 def imgs(c):
-    iu = c.get("image_uris")
-    if not iu:
-        faces = c.get("card_faces") or []
-        iu = faces[0].get("image_uris") if faces else None
-    iu = iu or {}
-    return iu.get("small", ""), iu.get("normal", ""), iu.get("art_crop", "")
+    # Returns (small, normal, art_crop, back_normal). back_normal is set only for true
+    # double-faced cards (transform / modal DFC) where the second face has its own image.
+    faces = c.get("card_faces") or []
+    front = c.get("image_uris")
+    back = ""
+    if not front and faces:
+        front = faces[0].get("image_uris")
+        if len(faces) >= 2 and faces[1].get("image_uris"):
+            back = faces[1]["image_uris"].get("normal", "")
+    front = front or {}
+    return front.get("small", ""), front.get("normal", ""), front.get("art_crop", ""), back
 
 # year -> category -> [card records]; plus per-year sets + title card
 by_year = defaultdict(lambda: defaultdict(list))
 year_sets = defaultdict(set)
 year_value = defaultdict(float)
 year_title = {}  # year -> (value, record)
-year_setinfo = defaultdict(lambda: defaultdict(lambda: {"name": "", "count": 0}))  # year -> set -> {name,count}
+year_setinfo = defaultdict(lambda: defaultdict(lambda: {"name": "", "count": 0, "topval": -1.0, "art": "", "top": ""}))  # year -> set -> top-card + counts
 
 with open(BULK) as f:
     for line in f:
@@ -57,7 +62,7 @@ with open(BULK) as f:
         if len(rel) < 4:
             continue
         year = rel[:4]
-        small, normal, art = imgs(c)
+        small, normal, art, back = imgs(c)
         usd, usdf = c.get("prices", {}).get("usd"), c.get("prices", {}).get("usd_foil")
         val = max(fval(usd), fval(usdf))
         rec = {
@@ -67,11 +72,15 @@ with open(BULK) as f:
             "r": c.get("rarity", ""), "p": usd, "pf": usdf,
             "img": small, "big": normal, "u": (c.get("scryfall_uri") or "").split("?")[0],
         }
+        if back:
+            rec["b2"] = back  # back face image (double-faced cards only)
         by_year[year][categorize(rec["t"])].append(rec)
         year_sets[year].add(rec["s"])
         si = year_setinfo[year][rec["s"]]
         si["name"] = c.get("set_name") or rec["s"]
         si["count"] += 1
+        if art and val > si["topval"]:
+            si["topval"] = val; si["art"] = art; si["top"] = rec["n"]
         year_value[year] += fval(usd)  # nonfoil sum as the year's "market" figure
         # title card = highest single-card value, prefer one with art
         if year not in year_title or val > year_title[year][0]:
@@ -92,7 +101,8 @@ for year in sorted(by_year):
         cards.sort(key=lambda r: (r["n"].lower(), r["s"], r["cn"]))
         cat_blocks.append({"name": name, "count": len(cards), "cards": cards})
     sets_list = sorted(
-        [{"code": k, "name": v["name"], "count": v["count"]} for k, v in year_setinfo[year].items()],
+        [{"code": k, "name": v["name"], "count": v["count"], "art": v["art"],
+          "top": v["top"], "value": round(max(v["topval"], 0.0), 2)} for k, v in year_setinfo[year].items()],
         key=lambda x: (-x["count"], x["name"]))
     with open(f"{OUT}/{year}.json", "w") as fo:
         json.dump({"year": year, "totalCards": total, "sets": sets_list, "categories": cat_blocks},

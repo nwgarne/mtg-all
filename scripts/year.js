@@ -1,8 +1,17 @@
 /*
  * year.js — MTG-by-year browser, one page per release year.
  * Reads the year from the URL path (/2024/ -> "2024"), fetches
- * /data/<year>.json, and renders every card from that year grouped
- * by type into a single-open accordion.
+ * /data/<year>.json, and renders every card from that year.
+ *
+ * TWO VIEWS, routed by the URL hash:
+ *   - PICKER (no hash): a grid of "deck" cards (the same .year-card look
+ *     as the homepage). An "All cards" card plus one per `sets` entry.
+ *   - SCOPE  (#all or #<setcode>): that scope's type accordion under a
+ *     sticky toolbar (back button + scope label + sort + type jump-pills),
+ *     with a floating back-to-top button.
+ * Reading location.hash on load chooses the initial view; a hashchange
+ * listener swaps views, so the browser Back button works and views are
+ * shareable.
  *
  * Mirrors decks.dirtyshoulders.com decklist.js for the card-tile DOM,
  * the category block, and the click-to-zoom lightbox so the copied
@@ -11,17 +20,19 @@
  * PERFORMANCE CONTRACT (a year can hold ~13,000 cards, one category
  * up to ~4,500): tiles are RENDERED ON EXPAND only. The DOM holds the
  * tiles of at most ONE category at a time. Opening a category clears
- * any other open category's body; closing a category clears its own.
+ * any other open category's body; collapsing a category clears its own;
+ * leaving the scope view (back to the picker) tears the accordion down.
  * Every card image is loading="lazy" so only on-screen images fetch.
  *
- * CONTROLS (rendered from JS, under the hero, above the accordion):
- *   - Set scope: "All cards" or one set code; filters every category
- *     to card.s === code, dropping categories that empty out.
- *   - Sort: reorders cards WITHIN each type section (Name / Price /
- *     Rarity / Mana value) without ever reordering the sections.
- * Changing either re-derives the categories (filter on the FULL
- * arrays, then sort) and re-renders the accordion. Render-on-expand
- * is preserved: only the open category's tiles ever touch the DOM.
+ * SCOPE TOOLBAR (sticky, in the scope view only):
+ *   - "← Sets" clears the hash, returning to the picker.
+ *   - Scope label ("All cards" or "<Set name> - <n> cards").
+ *   - Sort <select>: reorders cards WITHIN each type section (Name /
+ *     Price / Rarity / Mana value) without ever reordering the sections.
+ *   - Type jump-pills: one per non-empty type; opens + scrolls to it.
+ * Changing sort re-derives the categories (filter on the FULL arrays,
+ * then sort) and re-renders the accordion. Render-on-expand is preserved:
+ * only the open category's tiles ever touch the DOM.
  * All wiring is addEventListener (CSP: script-src 'self', no inline).
  */
 (function () {
@@ -60,6 +71,13 @@
     if (!isFinite(v)) return null;
     return '$' + v.toFixed(2);
   }
+  // Whole-dollar price for the set-card caption: 2299.99 -> "$2,300"; junk -> ''.
+  function fmtWhole(raw) {
+    if (raw == null) return '';
+    var v = parseFloat(raw);
+    if (!isFinite(v)) return '';
+    return '$' + Math.round(v).toLocaleString('en-US');
+  }
 
   // Max market price of a card across nonfoil + foil; 0 when neither.
   function cardMaxPrice(c) {
@@ -83,6 +101,8 @@
   }
 
   // --- Lightbox (mirrors decklist.js: backdrop click + Escape + close button) ---
+  // Supports one OR two faces: a double-faced card (back image in `b2`)
+  // shows front + back together; single image otherwise.
   var _lightbox = null;
   var _lightboxOpener = null;
   function ensureLightbox() {
@@ -93,10 +113,9 @@
     lb.setAttribute('aria-modal', 'true');
     lb.setAttribute('aria-hidden', 'true');
     lb.setAttribute('aria-label', 'Card preview');
+    // The inner holds one or two <img>; CSS lays the pair side by side
+    // on desktop and stacks them on narrow screens.
     var inner = el('div', 'card-lightbox__inner');
-    var img = document.createElement('img');
-    img.setAttribute('alt', '');
-    inner.appendChild(img);
     lb.appendChild(inner);
     var close = el('button', 'card-lightbox__close', '×');
     close.setAttribute('type', 'button');
@@ -105,7 +124,9 @@
     function hide() {
       lb.classList.remove('is-open');
       lb.setAttribute('aria-hidden', 'true');
-      img.removeAttribute('src');
+      // Drop the images so nothing keeps fetching/decoding while closed.
+      inner.textContent = '';
+      lb.classList.remove('is-dfc');
       if (_lightboxOpener && typeof _lightboxOpener.focus === 'function') {
         try { _lightboxOpener.focus(); } catch (e) {}
       }
@@ -120,12 +141,25 @@
     _lightbox = lb;
     return lb;
   }
-  function openLightbox(url, alt, opener) {
-    if (!url) return;
-    var lb = ensureLightbox();
-    var img = lb.querySelector('img');
-    img.setAttribute('src', url);
+  function lightboxImg(src, alt) {
+    var img = document.createElement('img');
+    img.setAttribute('src', src);
     img.setAttribute('alt', alt || '');
+    return img;
+  }
+  // front = the `big` image; back = the optional `b2` image.
+  function openLightbox(front, back, name, opener) {
+    if (!front && !back) return;
+    var lb = ensureLightbox();
+    var inner = lb.querySelector('.card-lightbox__inner');
+    inner.textContent = '';
+    if (front) inner.appendChild(lightboxImg(front, name ? name + ' (front)' : ''));
+    if (back) {
+      inner.appendChild(lightboxImg(back, name ? name + ' (back)' : ''));
+      lb.classList.add('is-dfc');
+    } else {
+      lb.classList.remove('is-dfc');
+    }
     lb.classList.add('is-open');
     lb.setAttribute('aria-hidden', 'false');
     _lightboxOpener = opener || (typeof document !== 'undefined' ? document.activeElement : null);
@@ -134,19 +168,22 @@
   }
 
   // --- Card tile (mirrors decklist.js buildCardRow + .card-tile CSS) ---
-  // c = { n, s, cn, t, m, c, r, p, pf, img, big, u }  (c here = mana value)
+  // c = { n, s, cn, t, m, c, r, p, pf, img, big, b2, u }  (c here = mana value)
   function buildCardTile(c) {
     var name = c.n || '';
     var row = el('div', 'card-tile');
     row.setAttribute('data-card', name);
     row.setAttribute('role', 'row');
 
-    // Image button -> opens the zoom lightbox of the `big` image.
+    // Image button -> opens the zoom lightbox (front, plus back when `b2`).
     var imgWrap = el('button', 'card-tile__image');
     imgWrap.setAttribute('type', 'button');
-    imgWrap.setAttribute('aria-label', 'Preview ' + name + ' larger');
+    var dfc = !!c.b2;
+    imgWrap.setAttribute('aria-label',
+      'Preview ' + name + ' larger' + (dfc ? ' (front and back)' : ''));
     var big = c.big || c.img || '';
-    imgWrap.addEventListener('click', function () { openLightbox(big, name, imgWrap); });
+    var back = c.b2 || '';
+    imgWrap.addEventListener('click', function () { openLightbox(big, back, name, imgWrap); });
     if (c.img) {
       var imgEl = document.createElement('img');
       imgEl.setAttribute('loading', 'lazy');
@@ -294,7 +331,7 @@
   // --- Accordion: render-on-expand, single-open ---
   // State for the current derived render. Parallel arrays for the
   // rendered category blocks; openName tracks which category (by name,
-  // so it survives a re-derive) is open across scope/sort changes.
+  // so it survives a re-derive) is open across sort changes.
   var openName = null;
   var catHeads = [];
   var catWraps = [];
@@ -334,7 +371,24 @@
     return -1;
   }
 
-  function toggle(idx) {
+  // Scroll so category idx's header parks just under the sticky toolbar.
+  // scroll-margin-top on the header (= the combined sticky offset) does
+  // the spacing; this fires after the expand paints.
+  function scrollToCat(idx) {
+    if (idx < 0 || idx >= catHeads.length) return;
+    var head = catHeads[idx];
+    if (head && typeof head.scrollIntoView === 'function') {
+      try { head.scrollIntoView({ block: 'start' }); return; } catch (e) {}
+    }
+    // Fallback: window.scrollTo to the header top minus the sticky offset.
+    var off = stickyOffsetPx();
+    var y = 0;
+    var node = head;
+    while (node) { y += node.offsetTop || 0; node = node.offsetParent; }
+    try { window.scrollTo(0, Math.max(0, y - off)); } catch (e) {}
+  }
+
+  function toggle(idx, scroll) {
     var cur = openIndex();
     if (cur === idx) {
       // Toggle the open one shut.
@@ -346,6 +400,18 @@
     if (cur !== -1) collapse(cur);
     expand(idx);
     openName = catNames[idx];
+    if (scroll) scrollToCat(idx);
+  }
+
+  // Open category idx (used by the jump-pills); never toggles shut, and
+  // always scrolls its header to the top.
+  function openCat(idx) {
+    var cur = openIndex();
+    if (cur === idx) { scrollToCat(idx); return; }
+    if (cur !== -1) collapse(cur);
+    expand(idx);
+    openName = catNames[idx];
+    scrollToCat(idx);
   }
 
   function buildCatBlock(category, idx) {
@@ -359,7 +425,7 @@
     var count = (category.count != null) ? category.count : (category.cards ? category.cards.length : 0);
     head.appendChild(el('span', 'deck-cat__count', fmtInt(count) + (count === 1 ? ' card' : ' cards')));
     head.appendChild(el('span', 'deck-cat__chev', '▾'));
-    head.addEventListener('click', function () { toggle(idx); });
+    head.addEventListener('click', function () { toggle(idx, true); });
     wrap.appendChild(head);
 
     var body = el('div', 'deck-cat__body');
@@ -388,7 +454,7 @@
 
     gridEl.innerHTML = '';
     if (!derivedCats.length) {
-      // Every category filtered out under this scope: friendly inline note.
+      // Empty scope: friendly inline note.
       openName = null;
       var note = el('p', 'year-controls__empty',
         'No cards in this set for the current view.');
@@ -409,9 +475,62 @@
     }
   }
 
-  // --- Controls (Set scope + Sort) ---
-  // Rendered between the hero and the accordion. Both are <select>s
-  // wired with addEventListener; changing either re-derives + repaints.
+  // ============================================================
+  //  STICKY OFFSET COORDINATION
+  //  The top header (.mtg-topbar) is sticky at top:0; the scope
+  //  toolbar parks just under it; section headers park under both.
+  //  We measure both live heights and publish them as CSS vars so
+  //  the toolbar `top`, the header `top`, and the scroll-into-view
+  //  margin all share one source of truth.
+  //    --mtg-topbar-h : the header height
+  //    --toolbar-h    : the header + scope-toolbar height (the full
+  //                     sticky stack a section header must clear)
+  // ============================================================
+  var _topbarEl = null;
+  var _toolbarEl = null;
+
+  function topbarHeightPx() {
+    if (!_topbarEl) _topbarEl = document.querySelector('.mtg-topbar');
+    return _topbarEl ? Math.round(_topbarEl.getBoundingClientRect().height) : 56;
+  }
+  function toolbarHeightPx() {
+    return _toolbarEl ? Math.round(_toolbarEl.getBoundingClientRect().height) : 0;
+  }
+  // The full sticky stack height a section header has to clear.
+  function stickyOffsetPx() {
+    return topbarHeightPx() + toolbarHeightPx();
+  }
+
+  function syncStickyVars() {
+    var root = document.documentElement;
+    var tb = topbarHeightPx();
+    root.style.setProperty('--mtg-topbar-h', tb + 'px');
+    root.style.setProperty('--toolbar-h', (tb + toolbarHeightPx()) + 'px');
+  }
+
+  // Keep the vars current as the toolbar reflows (wraps on resize).
+  var _ro = null;
+  function watchToolbar(toolbar) {
+    _toolbarEl = toolbar;
+    syncStickyVars();
+    if (_ro) { try { _ro.disconnect(); } catch (e) {} _ro = null; }
+    if (toolbar && typeof ResizeObserver !== 'undefined') {
+      _ro = new ResizeObserver(function () { syncStickyVars(); });
+      try { _ro.observe(toolbar); } catch (e) {}
+      try { _ro.observe(document.querySelector('.mtg-topbar')); } catch (e) {}
+    }
+  }
+  function unwatchToolbar() {
+    if (_ro) { try { _ro.disconnect(); } catch (e) {} _ro = null; }
+    _toolbarEl = null;
+    var root = document.documentElement;
+    // Leave --mtg-topbar-h alone; just zero the toolbar contribution.
+    root.style.setProperty('--toolbar-h', topbarHeightPx() + 'px');
+  }
+  // One window resize listener (added once) re-measures whatever is live.
+  window.addEventListener('resize', function () { syncStickyVars(); });
+
+  // --- Sort options (shared by the scope toolbar) ---
   var SORT_OPTIONS = [
     { value: 'name', label: 'Name (A-Z)' },
     { value: 'price', label: 'Price (high to low)' },
@@ -419,60 +538,75 @@
     { value: 'cmc', label: 'Mana value (low to high)' }
   ];
 
-  function buildControls(state, onChange) {
-    var bar = el('div', 'year-controls');
-    bar.setAttribute('role', 'group');
-    bar.setAttribute('aria-label', 'View controls');
-
-    // -- SET scope --
-    var setField = el('label', 'year-controls__field');
-    setField.appendChild(el('span', 'year-controls__label', 'Set'));
-    var setSel = el('select', 'year-controls__select');
-    setSel.setAttribute('aria-label', 'Filter by set');
-
-    var allOpt = el('option', null, 'All cards (' + fmtInt(state.totalCards) + ')');
-    allOpt.value = '';
-    setSel.appendChild(allOpt);
-    for (var i = 0; i < state.sets.length; i++) {
-      var s = state.sets[i];
-      var code = s.code || '';
-      // "Name (CODE) - count"  (hyphen, never an em dash)
-      var optLabel = (s.name || code) + ' (' + String(code).toUpperCase() + ') - ' + fmtInt(s.count);
-      var opt = el('option', null, optLabel);
-      opt.value = code;
-      setSel.appendChild(opt);
-    }
-    setSel.value = state.scope;
-    setSel.addEventListener('change', function () {
-      state.scope = setSel.value;
-      onChange();
+  // ============================================================
+  //  BACK-TO-TOP BUTTON (floating; scope view only)
+  //  Appears after scrolling down, scrolls back to the top.
+  // ============================================================
+  var _toTop = null;
+  var _onScrollToTop = null;
+  function ensureBackToTop() {
+    if (_toTop) return _toTop;
+    var btn = el('button', 'year-totop', '↑');
+    btn.setAttribute('type', 'button');
+    btn.setAttribute('aria-label', 'Back to top');
+    btn.addEventListener('click', function () {
+      try { window.scrollTo({ top: 0, behavior: 'smooth' }); }
+      catch (e) { window.scrollTo(0, 0); }
     });
-    setField.appendChild(setSel);
-    bar.appendChild(setField);
-
-    // -- SORT --
-    var sortField = el('label', 'year-controls__field');
-    sortField.appendChild(el('span', 'year-controls__label', 'Sort'));
-    var sortSel = el('select', 'year-controls__select');
-    sortSel.setAttribute('aria-label', 'Sort cards within each type');
-    for (var k = 0; k < SORT_OPTIONS.length; k++) {
-      var so = SORT_OPTIONS[k];
-      var sopt = el('option', null, so.label);
-      sopt.value = so.value;
-      sortSel.appendChild(sopt);
+    document.body.appendChild(btn);
+    _toTop = btn;
+    return btn;
+  }
+  function showBackToTop() {
+    var btn = ensureBackToTop();
+    function update() {
+      var y = window.pageYOffset || document.documentElement.scrollTop || 0;
+      if (y > 400) btn.classList.add('is-visible');
+      else btn.classList.remove('is-visible');
     }
-    sortSel.value = state.sort;
-    sortSel.addEventListener('change', function () {
-      state.sort = sortSel.value;
-      onChange();
-    });
-    sortField.appendChild(sortSel);
-    bar.appendChild(sortField);
-
-    return bar;
+    _onScrollToTop = update;
+    window.addEventListener('scroll', update, { passive: true });
+    update();
+  }
+  function hideBackToTop() {
+    if (_onScrollToTop) {
+      window.removeEventListener('scroll', _onScrollToTop);
+      _onScrollToTop = null;
+    }
+    if (_toTop) _toTop.classList.remove('is-visible');
   }
 
-  // --- Hero ---
+  // ============================================================
+  //  HASH ROUTING
+  //  ''        -> picker (set cards)
+  //  '#all'    -> all-cards accordion (scope = '')
+  //  '#<code>' -> that set's accordion (scope = code)
+  //  A set code is matched case-insensitively against the sets list;
+  //  anything unknown falls back to the picker.
+  // ============================================================
+  function readHash() {
+    var h = '';
+    try { h = (window.location.hash || '').replace(/^#/, ''); } catch (e) { h = ''; }
+    return h;
+  }
+  function setHash(h) {
+    // Assign through location.hash so it pushes a history entry (Back works).
+    try { window.location.hash = h ? ('#' + h) : ''; } catch (e) {}
+  }
+  function clearHash() {
+    // Remove the hash without leaving a bare "#": pushState when available
+    // so Back returns to the previous in-page view; else assign empty hash.
+    if (window.history && typeof window.history.pushState === 'function') {
+      try {
+        var url = window.location.pathname + window.location.search;
+        window.history.pushState(null, '', url);
+        return;
+      } catch (e) {}
+    }
+    try { window.location.hash = ''; } catch (e) {}
+  }
+
+  // --- Hero (year + stat row), shared by both views ---
   function buildHero(year, totalCards, numCats, totalValue) {
     var hero = el('section', 'hero is-readout');
     hero.setAttribute('aria-label', 'Year overview');
@@ -504,7 +638,7 @@
     var statRow = el('div', 'stat-row');
     statRow.setAttribute('aria-label', 'Year stats');
     statRow.appendChild(statCell('Cards', fmtInt(totalCards)));
-    statRow.appendChild(statCell('Categories', fmtInt(numCats)));
+    statRow.appendChild(statCell('Sets', fmtInt(numCats)));
     statRow.appendChild(statCell('Nonfoil value', fmtMoney(totalValue)));
     hero.appendChild(statRow);
 
@@ -515,6 +649,258 @@
     cell.appendChild(el('span', 'stat-row__label', label));
     cell.appendChild(el('span', 'stat-row__value', value));
     return cell;
+  }
+
+  // ============================================================
+  //  PICKER VIEW — the set cards grid (replaces the Set dropdown)
+  //  Built to the homepage .year-card look (reused via home.css).
+  //  First card "All cards"; then one card per `sets` entry. Clicking
+  //  a card sets the hash, which the hashchange handler turns into the
+  //  matching scope view.
+  // ============================================================
+  // Inline background-image is the one inline style CSP permits. Wrap in
+  // quotes and strip quote/backslash chars so stray data can't break out.
+  function setBgImage(node, url) {
+    if (!url) { node.classList.add('is-plain'); return; }
+    var safe = String(url).replace(/["'\\]/g, '');
+    node.setAttribute('style', "background-image:url('" + safe + "')");
+  }
+
+  function buildPickerCard(opts) {
+    // opts: { hash, year, counts(text), title(text), code(text|null),
+    //         art, topName, topValue, ariaLabel }
+    var card = el('a', 'year-card');
+    card.setAttribute('href', '#' + opts.hash);
+    card.setAttribute('aria-label', opts.ariaLabel);
+    setBgImage(card, opts.art);
+
+    // Top rail: the card count (and set code when present).
+    var counts = el('div', 'year-card__counts');
+    counts.appendChild(el('strong', null, fmtInt(opts.count)));
+    counts.appendChild(document.createTextNode(opts.count === 1 ? ' card' : ' cards'));
+    if (opts.code) {
+      counts.appendChild(el('span', 'sep', '·'));
+      counts.appendChild(el('strong', null, '(' + opts.code + ')'));
+    }
+    card.appendChild(counts);
+
+    // The big title: "All cards" or the set NAME.
+    var titleEl = el('div', 'year-card__year year-card__set-name');
+    titleEl.textContent = opts.title;
+    titleEl.setAttribute('title', opts.title);
+    card.appendChild(titleEl);
+
+    // Caption: "Top: <name> - $<value>" (hyphen, no em dash).
+    if (opts.topName) {
+      var top = el('div', 'year-card__top');
+      top.appendChild(el('span', 'year-card__top-lbl', 'Top:'));
+      var nameEl = el('span', 'year-card__top-name', opts.topName);
+      nameEl.setAttribute('title', opts.topName);
+      top.appendChild(nameEl);
+      var whole = fmtWhole(opts.topValue);
+      if (whole) {
+        top.appendChild(el('span', 'sep', '-'));
+        top.appendChild(el('span', 'year-card__top-price', whole));
+      }
+      card.appendChild(top);
+    }
+
+    var arrow = el('span', 'year-card__arrow', '›');
+    arrow.setAttribute('aria-hidden', 'true');
+    card.appendChild(arrow);
+
+    // Clicking sets the hash (default <a href="#..."> already does, but
+    // be explicit so it works even if default is ever prevented upstream).
+    card.addEventListener('click', function (ev) {
+      // Let modified clicks (new tab) behave normally.
+      if (ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) return;
+      ev.preventDefault();
+      setHash(opts.hash);
+    });
+
+    return card;
+  }
+
+  function renderPicker(ctx) {
+    var grid = el('div', 'year-grid');
+    grid.id = 'year-set-grid';
+
+    var frag = document.createDocumentFragment();
+
+    // "All cards" card first: the year total, scope = all.
+    frag.appendChild(buildPickerCard({
+      hash: 'all',
+      count: ctx.totalCards,
+      title: 'All cards',
+      code: null,
+      art: ctx.heroArt,
+      topName: ctx.heroTopName,
+      topValue: ctx.heroTopValue,
+      ariaLabel: 'All cards — ' + fmtInt(ctx.totalCards) + ' cards in ' + ctx.year
+    }));
+
+    // One card per set (already sorted by count in the data).
+    for (var i = 0; i < ctx.sets.length; i++) {
+      var s = ctx.sets[i];
+      var code = (s.code || '').toUpperCase();
+      frag.appendChild(buildPickerCard({
+        hash: (s.code || '').toLowerCase(),
+        count: s.count || 0,
+        title: s.name || code || 'Set',
+        code: code,
+        art: s.art,
+        topName: s.top,
+        topValue: s.value,
+        ariaLabel: (s.name || code) + ' (' + code + ') — ' + fmtInt(s.count || 0) +
+          ' cards' + (s.top ? ', top card ' + s.top : '')
+      }));
+    }
+    grid.appendChild(frag);
+    return grid;
+  }
+
+  // ============================================================
+  //  SCOPE VIEW — sticky toolbar + the type accordion
+  // ============================================================
+  function buildToolbar(ctx, state, derived, onSortChange) {
+    var bar = el('div', 'year-toolbar');
+    bar.setAttribute('role', 'group');
+    bar.setAttribute('aria-label', 'Scope controls');
+
+    // Row 1: back button + scope label + sort.
+    var topRow = el('div', 'year-toolbar__row');
+
+    var back = el('button', 'year-toolbar__back');
+    back.setAttribute('type', 'button');
+    back.appendChild(el('span', 'year-toolbar__back-arrow', '←'));
+    back.appendChild(document.createTextNode(' Sets'));
+    back.setAttribute('aria-label', 'Back to set cards');
+    back.addEventListener('click', function () { clearHash(); });
+    topRow.appendChild(back);
+
+    // Scope label: "All cards" or "<Set name> - <n> cards".
+    var label = el('div', 'year-toolbar__label');
+    if (state.scope) {
+      label.textContent = (ctx.setName(state.scope) || state.scope.toUpperCase()) +
+        ' - ' + fmtInt(ctx.scopeCount(state.scope)) + ' cards';
+    } else {
+      label.textContent = 'All cards - ' + fmtInt(ctx.totalCards) + ' cards';
+    }
+    topRow.appendChild(label);
+
+    // Sort select.
+    var sortField = el('label', 'year-toolbar__sort');
+    sortField.appendChild(el('span', 'year-toolbar__sort-lbl', 'Sort'));
+    var sortSel = el('select', 'year-controls__select');
+    sortSel.setAttribute('aria-label', 'Sort cards within each type');
+    for (var k = 0; k < SORT_OPTIONS.length; k++) {
+      var so = SORT_OPTIONS[k];
+      var sopt = el('option', null, so.label);
+      sopt.value = so.value;
+      sortSel.appendChild(sopt);
+    }
+    sortSel.value = state.sort;
+    sortSel.addEventListener('change', function () {
+      state.sort = sortSel.value;
+      onSortChange();
+    });
+    sortField.appendChild(sortSel);
+    topRow.appendChild(sortField);
+
+    bar.appendChild(topRow);
+
+    // Row 2: type jump-pills (one per non-empty type in this scope).
+    if (derived.length) {
+      var pills = el('div', 'year-toolbar__pills');
+      pills.setAttribute('aria-label', 'Jump to type');
+      for (var i = 0; i < derived.length; i++) {
+        (function (idx, cat) {
+          var pill = el('button', 'year-pill');
+          pill.setAttribute('type', 'button');
+          pill.appendChild(el('span', 'year-pill__name', cat.name));
+          pill.appendChild(el('span', 'year-pill__n', fmtInt(cat.count)));
+          pill.setAttribute('aria-label',
+            'Jump to ' + cat.name + ' (' + fmtInt(cat.count) + ' cards)');
+          pill.addEventListener('click', function () { openCat(idx); });
+          pills.appendChild(pill);
+        })(i, derived[i]);
+      }
+      bar.appendChild(pills);
+    }
+
+    return bar;
+  }
+
+  function renderScope(ctx, host, state) {
+    host.innerHTML = '';
+    host.appendChild(ctx.hero);
+
+    var grid = el('div', 'deck-grid');
+    grid.id = 'year-grid';
+
+    var toolbarHolder = { bar: null };
+
+    // Re-derive + repaint the accordion (and rebuild the toolbar pills,
+    // since the non-empty type set can change with scope — though within
+    // a single scope view only the sort changes, the pills are stable).
+    function apply() {
+      // Remember the chosen sort so it carries to the next scope this session.
+      ctx.lastSort = state.sort;
+      var derived = deriveCategories(ctx.baseCats, state.scope, state.sort);
+      // Rebuild the toolbar so the jump-pills reflect the live derived set.
+      var newBar = buildToolbar(ctx, state, derived, apply);
+      if (toolbarHolder.bar && toolbarHolder.bar.parentNode) {
+        toolbarHolder.bar.parentNode.replaceChild(newBar, toolbarHolder.bar);
+      } else {
+        host.insertBefore(newBar, grid);
+      }
+      toolbarHolder.bar = newBar;
+      watchToolbar(newBar);
+      renderAccordion(grid, derived);
+    }
+
+    host.appendChild(grid);
+    apply();
+
+    showBackToTop();
+  }
+
+  // ============================================================
+  //  VIEW ROUTER
+  // ============================================================
+  function resolveScope(ctx, hash) {
+    // Returns { kind: 'picker' } | { kind: 'scope', scope: '' | code }.
+    if (!hash) return { kind: 'picker' };
+    if (hash === 'all') return { kind: 'scope', scope: '' };
+    var code = ctx.matchSet(hash);
+    if (code != null) return { kind: 'scope', scope: code };
+    // Unknown hash: fall back to the picker.
+    return { kind: 'picker' };
+  }
+
+  function showView(ctx, host) {
+    var route = resolveScope(ctx, readHash());
+    if (route.kind === 'picker') {
+      // Tear down any scope-view chrome.
+      unwatchToolbar();
+      hideBackToTop();
+      openName = null;
+      host.innerHTML = '';
+      host.appendChild(ctx.hero);
+      host.appendChild(renderPicker(ctx));
+      // Reset scroll to the top so the picker starts at the hero.
+      try { window.scrollTo(0, 0); } catch (e) {}
+    } else {
+      // Scope view. Reset the open category whenever the scope changes.
+      if (ctx.lastScope !== route.scope) {
+        openName = null;
+        ctx.lastScope = route.scope;
+      }
+      var state = { scope: route.scope, sort: ctx.lastSort || 'name' };
+      renderScope(ctx, host, state);
+      // Land at the top of the new scope view.
+      try { window.scrollTo(0, 0); } catch (e) {}
+    }
   }
 
   // --- Empty / error state ---
@@ -540,7 +926,7 @@
     host.appendChild(note);
   }
 
-  // --- Render ---
+  // --- Render (builds the shared context, then routes to a view) ---
   function render(host, year, data) {
     var categories = (data && Array.isArray(data.categories)) ? data.categories : [];
     if (!categories.length) { renderEmpty(host, year); return; }
@@ -559,32 +945,60 @@
     }
     var totalCards = (data.totalCards != null) ? data.totalCards : summedCount;
 
-    // Source of truth: the full, unsorted category arrays + the sets list.
-    var baseCats = categories;
     var sets = (data && Array.isArray(data.sets)) ? data.sets : [];
 
-    // Live view state; defaults = all cards, name A-Z.
-    var state = { scope: '', sort: 'name', totalCards: totalCards, sets: sets };
-    openName = null;
-
-    host.innerHTML = '';
-    // Hero shows the year-wide totals regardless of the active scope.
-    host.appendChild(buildHero(year, totalCards, baseCats.length, totalValue));
-
-    var grid = el('div', 'deck-grid');
-    grid.id = 'year-grid';
-
-    // re-derive + repaint the accordion for the current state.
-    function apply() {
-      var derived = deriveCategories(baseCats, state.scope, state.sort);
-      renderAccordion(grid, derived);
+    // Per-set lookups used by the toolbar label + scope routing.
+    var setByCode = {};       // upperCode -> set object
+    for (var s = 0; s < sets.length; s++) {
+      var c = (sets[s].code || '').toUpperCase();
+      if (c) setByCode[c] = sets[s];
+    }
+    function setName(scope) {
+      var hit = setByCode[(scope || '').toUpperCase()];
+      return hit ? (hit.name || scope) : null;
+    }
+    function scopeCount(scope) {
+      var hit = setByCode[(scope || '').toUpperCase()];
+      return hit && hit.count != null ? hit.count : 0;
+    }
+    // Match a hash (any case) to a real set code; returns the data's
+    // canonical (lowercase, as stored on cards) code, or null.
+    function matchSet(hash) {
+      var hit = setByCode[(hash || '').toUpperCase()];
+      return hit ? (hit.code || '') : null;
     }
 
-    host.appendChild(buildControls(state, apply));
-    host.appendChild(grid);
+    // The hero card art for the "All cards" picker tile = the top set's
+    // top-card art (sets are sorted by count, so [0] is the biggest set;
+    // its art is a sensible, on-theme cover). Fall back to none.
+    var heroSet = sets.length ? sets[0] : null;
 
-    // First paint: all cards, name A-Z, everything collapsed.
-    apply();
+    // Build the shared hero ONCE and reuse the same node across views.
+    var hero = buildHero(year, totalCards, sets.length, totalValue);
+
+    var ctx = {
+      year: year,
+      baseCats: categories,
+      sets: sets,
+      totalCards: totalCards,
+      hero: hero,
+      heroArt: heroSet ? heroSet.art : '',
+      heroTopName: heroSet ? heroSet.top : '',
+      heroTopValue: heroSet ? heroSet.value : null,
+      setName: setName,
+      scopeCount: scopeCount,
+      matchSet: matchSet,
+      lastScope: undefined,
+      lastSort: 'name'
+    };
+
+    openName = null;
+    host.innerHTML = '';
+
+    // Route to the initial view from the current hash, then keep both the
+    // browser Back button and shared links working via hashchange.
+    showView(ctx, host);
+    window.addEventListener('hashchange', function () { showView(ctx, host); });
   }
 
   // --- Boot ---
