@@ -111,10 +111,13 @@
     // The big year.
     card.appendChild(el('div', 'year-card__year', y.year));
 
-    // Caption: Top: <name> · $price
+    // Caption: "Top card: <name> · $price". The leading "Top card:" label
+    // (not just "Top:") makes the dollar figure read as THAT CARD's price,
+    // not a year-wide total - the price span also carries a title spelling
+    // it out in full for the same reason.
     if (title && topName) {
       const top = el('div', 'year-card__top');
-      top.appendChild(el('span', 'year-card__top-lbl', 'Top:'));
+      top.appendChild(el('span', 'year-card__top-lbl', 'Top card:'));
       const nameEl = el('span', 'year-card__top-name', topNameFront);
       nameEl.setAttribute('title', topName);
       top.appendChild(nameEl);
@@ -123,7 +126,9 @@
         appendSep(top);
         const priceEl = el('span', 'year-card__top-price', whole);
         const full = priceFull(title.value);
-        if (full) priceEl.setAttribute('title', full);
+        // Spell out that the price belongs to the top card, not the year.
+        priceEl.setAttribute('title',
+          'Top card price' + (full ? ': ' + full : ''));
         top.appendChild(priceEl);
       }
       card.appendChild(top);

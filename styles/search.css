@@ -54,9 +54,14 @@
   border-color: var(--accent-rail);
   box-shadow: 0 0 0 1px var(--accent-rail);
 }
-/* Drop the native search clear/decoration so it reads as one editorial field. */
-.mtg-search__input::-webkit-search-decoration,
-.mtg-search__input::-webkit-search-cancel-button { -webkit-appearance: none; }
+/* Drop the native search clear/decoration so it reads as one editorial field.
+   type="search" otherwise paints its own clear glyph next to our custom .mtg-search__clear,
+   so hide it outright (display:none) rather than just resetting its appearance. */
+.mtg-search__input::-webkit-search-decoration { -webkit-appearance: none; }
+.mtg-search__input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  display: none;
+}
 
 /* Custom clear (x): shown by search.js whenever the field has text.
    The whole 44x44 padding-box is the clickable/focusable target (WCAG 2.5.5), while
@@ -226,6 +231,35 @@ html.mtg-find-lock { overflow: hidden; }
   transition: color 0.12s ease, border-color 0.12s ease;
 }
 .mtg-find__close:hover { color: var(--bone-900); border-color: var(--accent-rail); }
+
+/* In-overlay "search another card" field, mounted inside .mtg-find__head between the
+   title and the close button. It carries the .mtg-search class too, so it inherits the
+   topbar field + autocomplete-menu styling and the menu's position:relative anchor;
+   here we only size and place it for the header. Its menu drops below the sticky head. */
+.mtg-find__search {
+  flex: 1 1 240px;
+  min-width: 0;
+  max-width: 360px;
+  align-self: center;
+  margin-left: auto;          /* hug toward the close button; title keeps its own size */
+}
+.mtg-find__search .mtg-search__menu {
+  /* The menu must clear the sticky header's stacking context and the panel padding. */
+  z-index: calc(var(--z-overlay) + 6);
+  max-width: min(360px, 80vw);
+}
+@media (max-width: 560px) {
+  /* Stack the in-overlay search under the title row so it gets full width on phones. */
+  .mtg-find__head { flex-wrap: wrap; }
+  .mtg-find__search {
+    order: 3;
+    flex-basis: 100%;
+    max-width: none;
+    margin-left: 0;
+  }
+  .mtg-find__search .mtg-search__menu { max-width: min(360px, 92vw); }
+}
+
 .mtg-find__body {
   overflow-y: auto;
   padding: var(--space-md);
@@ -234,6 +268,23 @@ html.mtg-find-lock { overflow: hidden; }
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: var(--space-xs);
+}
+
+/* Overlay tile meta vs price: at narrow widths the printing tile (a 1fr/auto grid
+   from card-tile.css) can let a long set name and the nowrap price crowd each other.
+   Inside the overlay we keep the set-name ellipsized to a single line (card-tile.css
+   relaxes it to white-space:normal under 640px) and guarantee the price its own
+   column with a real gap, so metadata and the TCG price never overlap. */
+.mtg-find__grid .card-tile__name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mtg-find__grid .card-tile__meta {
+  min-width: 0;          /* let the meta column actually shrink so ellipsis can engage */
+}
+.mtg-find__grid .card-tile__price {
+  padding-left: var(--space-2xs);   /* reserved gutter between metadata and the price */
 }
 
 /* The zoom for a printing image rides above the overlay. */
@@ -251,10 +302,17 @@ html.mtg-find-lock { overflow: hidden; }
   /* (Close button is already a 44px target at every width; see base rule.) */
 }
 @media (max-width: 560px) {
-  .mtg-search { flex-basis: 200px; }
-  .mtg-search__input { font-size: var(--fs-label); letter-spacing: var(--tracking-normal); }
+  .mtg-search { flex-basis: 210px; }
+  .mtg-search__input {
+    font-size: var(--fs-label);
+    letter-spacing: var(--tracking-normal);
+    /* A touch more left room so the text/placeholder is not pinched against the edge
+       once the field narrows (right padding still reserves the clear-glyph lane). */
+    padding-left: 0.85rem;
+  }
   .mtg-find__title { font-size: var(--fs-display, 1.75rem); }
 }
 @media (max-width: 380px) {
-  .mtg-search { flex-basis: 150px; }
+  /* Keep a comfortable minimum so the field never looks crushed at ~390px and below. */
+  .mtg-search { flex-basis: 168px; }
 }

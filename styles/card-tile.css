@@ -197,6 +197,18 @@
     background: var(--ink-000);
     border: 1px solid var(--rule-medium);
     border-radius: var(--r-md);
+    /* PERF: the big categories mount thousands of tiles. content-visibility
+       lets the engine skip layout + paint for any tile scrolled off-screen.
+       contain-intrinsic-size is the placeholder it reserves for a skipped
+       tile, so it MUST match the real rendered height or scrolling janks /
+       fights the year page's own body-height reservation. That reservation
+       (year.js) sizes a tile as image + ~60px meta at the 220px column
+       minimum: 220 x 680/488 ~= 306px image + ~66px of meta/price/padding ~=
+       372px tall. We reserve that exact box (width 220px = the column min,
+       so wider 1fr columns just scale the height the engine measures once
+       on-screen). Close to the real height = no CLS, no scroll jank. */
+    content-visibility: auto;
+    contain-intrinsic-size: 220px 372px;
     transition:
       background var(--dur-fast) var(--ease-out-quart),
       border-color var(--dur-fast) var(--ease-out-quart),
@@ -353,6 +365,27 @@
     font-size: var(--fs-caption);
     letter-spacing: var(--tracking-wide);
     line-height: 1;
+    text-transform: none;
+    color: var(--bone-700);
+  }
+
+  /* NO PRICE - the JS tile builders emit
+       <span class="card-tile__noprice">No price</span>
+     in the price cell when neither nonfoil nor foil has a value. The cell
+     defaults to big bright Antonio numerals (the loud gold price), so we
+     reset every one of those here: drop to the body face, mute to bone-700,
+     hold it smaller than the gold price, and lean it italic so it reads as a
+     soft "no price available" state rather than a broken/empty slot. It still
+     occupies the cell, so the price column keeps its visual weight and the
+     right edge stays aligned with priced siblings. */
+  .card-tile__noprice {
+    display: inline-block;
+    font-family: var(--font-body);
+    font-weight: var(--fw-body-regular);
+    font-style: italic;
+    font-size: var(--fs-caption);
+    line-height: 1.1;
+    letter-spacing: var(--tracking-normal);
     text-transform: none;
     color: var(--bone-700);
   }

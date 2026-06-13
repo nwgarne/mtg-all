@@ -269,7 +269,9 @@
     row.appendChild(meta);
 
     // Price - shown to everyone. nonfoil "$p", foil appended when present;
-    // foil-only when p is null; "-" when both are null.
+    // foil-only when p is null; an explicit "No price" chip when both are null
+    // (a bare "-" read as a typo / missing data) (Item 4). The .card-tile__noprice
+    // CSS is owned by another agent; we only emit the element here.
     var price = el('div', 'card-tile__price');
     price.appendChild(el('span', 'lbl', 'TCG'));
     var pStr = fmtPrice(c.p);
@@ -282,7 +284,7 @@
       price.appendChild(document.createTextNode(pfStr));
       price.appendChild(el('span', 'card-tile__foil', 'foil only'));
     } else {
-      price.appendChild(document.createTextNode('-'));
+      price.appendChild(el('span', 'card-tile__noprice', 'No price'));
     }
     row.appendChild(price);
 
@@ -959,14 +961,36 @@
   // "2024 > All cards · ..."). The count + value come from the DERIVED cats so
   // they track the live scope AND any active rarity filter. No em dashes.
   function buildScopeReadout(ctx, state, derived) {
-    // Live totals across the derived (already scope+rarity filtered) cats.
+    // Live totals across the derived (already scope+rarity filtered) cats so
+    // the breadcrumb tracks the active rarity filter (Item 3). In FLAT mode the
+    // grid only paints the top FLAT_CAP by the current sort, so cap the count
+    // AND sum the value over just those shown cards - otherwise the breadcrumb
+    // would advertise e.g. "1,467 cards / $X" over a grid showing 200 tiles
+    // (Item 3, "and the Flat cap where relevant"). Type mode sums everything.
     var count = 0, value = 0;
-    for (var i = 0; i < derived.length; i++) {
-      var cards = derived[i].cards || [];
-      count += derived[i].count != null ? derived[i].count : cards.length;
-      for (var j = 0; j < cards.length; j++) {
-        var v = parseFloat(cards[j].p);
-        if (isFinite(v)) value += v;
+    if (state.group === 'flat') {
+      // Concat the scope+rarity-filtered cards, rank by the current sort, and
+      // take the same top slice renderFlat shows; total the count + value of it.
+      var all = [];
+      for (var fi = 0; fi < derived.length; fi++) {
+        var fcards = derived[fi].cards || [];
+        for (var fj = 0; fj < fcards.length; fj++) all.push(fcards[fj]);
+      }
+      all.sort(comparatorFor(state.sort));
+      var shown = all.length > FLAT_CAP ? all.slice(0, FLAT_CAP) : all;
+      count = shown.length;
+      for (var si = 0; si < shown.length; si++) {
+        var sv = parseFloat(shown[si].p);
+        if (isFinite(sv)) value += sv;
+      }
+    } else {
+      for (var i = 0; i < derived.length; i++) {
+        var cards = derived[i].cards || [];
+        count += derived[i].count != null ? derived[i].count : cards.length;
+        for (var j = 0; j < cards.length; j++) {
+          var v = parseFloat(cards[j].p);
+          if (isFinite(v)) value += v;
+        }
       }
     }
     var scopeName = state.scope
@@ -1184,6 +1208,15 @@
         gb.addEventListener('click', function () {
           if ((state.group || 'type') === opt.value) return; // no-op re-click
           state.group = opt.value;
+          // Item 1: Flat exists to surface chase cards, so a "Name" sort there
+          // yields a useless A-Aj slice (the top 200 alphabetically). Entering
+          // Flat while sorted by Name auto-switches Sort to Price (high to low)
+          // so the flat list ranks by value. Name stays selectable once in Flat;
+          // this only defaults the sort on ENTRY. The flat note + live region
+          // both read state.sort, so they stay accurate to the new sort.
+          if (opt.value === 'flat' && state.sort === 'name') {
+            state.sort = 'price';
+          }
           state._refocus = { kind: 'group', value: opt.value };
           onChange();
         });
@@ -1264,7 +1297,15 @@
           pill.appendChild(el('span', 'year-pill__n', fmtInt(cat.count)));
           pill.setAttribute('aria-label',
             'Jump to ' + cat.name + ' (' + fmtInt(cat.count) + ' cards)');
-          pill.addEventListener('click', function () { openCat(idx); });
+          pill.addEventListener('click', function () {
+            openCat(idx);
+            // Item 2: jump-pill activation is otherwise silent to screen readers
+            // (the scroll + open are visual only). Announce the destination via
+            // the existing aria-live status node, e.g. "Jumped to Lands, 1,467
+            // cards." so AT users hear where focus / the view moved.
+            announce('Jumped to ' + cat.name + ', ' + fmtInt(cat.count) +
+              (cat.count === 1 ? ' card.' : ' cards.'));
+          });
           pills.appendChild(pill);
           catPills[idx] = pill;
         })(i, derived[i]);
@@ -1475,6 +1516,11 @@
       // new scope auto-opens its first category (Item 3).
       if (ctx.lastScope !== route.scope) {
         openName = null;
+        // Item 7: a rarity filter carried from the previous scope silently
+        // shrinks a freshly opened set (e.g. land on "Mythic" with most cards
+        // hidden). Reset rarity to "All" on a SCOPE change so each set/All-cards
+        // view starts unfiltered; the Sort + Group choice still carry over.
+        ctx.lastRarity = 'all';
         ctx.lastScope = route.scope;
       }
       var state = {

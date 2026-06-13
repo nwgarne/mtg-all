@@ -568,7 +568,12 @@
     color: var(--bone-700);
     white-space: nowrap;
   }
-  /* Two buttons fused into one pill: a shared rail with an inner divider. */
+  /* Two buttons fused into one pill: a shared rail with an inner divider.
+     Item 6: the segmented control's whole boundary - the outer rail AND the
+     inner "By type | Flat" divider - is ONE color (--accent-rail, >=3:1 for
+     WCAG 1.4.11), so the control reads as a single unit with no mismatched edge
+     (an earlier pass had bone-800 on three sides + accent-rail on the divider,
+     which made the boundary read inconsistently). */
   .year-group {
     display: inline-flex;
     align-items: stretch;
@@ -593,6 +598,8 @@
       background-color var(--dur-fast) var(--ease-out-quart),
       color var(--dur-fast) var(--ease-out-quart);
   }
+  /* Inner divider matches the outer rail exactly (same --accent-rail token) so
+     the segmented control's border is one consistent >=3:1 color (Item 6). */
   .year-group__btn + .year-group__btn {
     border-left: 1px solid var(--accent-rail, var(--rule-strong));
   }
@@ -841,6 +848,44 @@
   /* ============================================================
      SCOPE-VIEW RESPONSIVE
      ============================================================ */
+
+  /* Item 5: on tablets (~641-900px) the rarity + jump-pill rows used to WRAP,
+     ballooning the sticky toolbar to 350-402px and shoving the grid far down.
+     Extend the single-row horizontal-scroll + right-edge fade-mask treatment
+     (previously only <=640px) up through 900px so both rows stay one-line
+     scrollers and the sticky stack stays compact on tablets too. The phone-only
+     spacing/padding tightening still lives in the <=640px block below; this rule
+     carries only the scroller MECHANISM (nowrap + overflow + fade + no-shrink
+     children). padding-right/scroll-padding-right keep the last chip clear of
+     the fade so it stays readable at the scroll end. */
+  @media (max-width: 900px) {
+    .year-toolbar__rarity,
+    .year-toolbar__pills {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: thin;
+      padding-right: var(--space-md);
+      scroll-padding-right: var(--space-md);
+      -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+      mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+    }
+    .year-pill,
+    .year-rarity { flex: 0 0 auto; }
+    /* Keep the back + label + Group + Sort row on ONE line on tablets (641-900px)
+       too, not just phones: hide the control prefixes and fix the Sort width so the
+       long option text cannot grow it and wrap the row (which ballooned the sticky
+       stack to ~300px on tablet). The 44px touch sizing comes from the coarse-pointer
+       rule below. */
+    .year-toolbar__label { flex: 1 1 6rem; min-width: 0; font-size: var(--fs-meta); }
+    .year-toolbar__sort-lbl,
+    .year-toolbar__group-lbl { display: none; }
+    .year-toolbar__sort .year-controls__select {
+      width: 8.5rem; min-width: 0; max-width: 8.5rem;
+    }
+    .year-group__btn { padding-left: var(--space-xs); padding-right: var(--space-xs); }
+  }
+
   @media (max-width: 640px) {
     .year-toolbar {
       top: var(--mtg-topbar-h, 50px);
@@ -865,7 +910,8 @@
        self-explanatory) so the row stays compact, trimming the sticky stack. */
     .year-toolbar__sort-lbl,
     .year-toolbar__group-lbl { display: none; }
-    /* Compact the group toggle's buttons to match the tighter phone row. */
+    /* Compact the group toggle's buttons (side padding) to match the tighter
+       phone row; the 44px min-height comes from the shared rule just below. */
     .year-group__btn {
       padding-left: var(--space-xs);
       padding-right: var(--space-xs);
@@ -883,9 +929,12 @@
       padding-top: var(--space-2xs);
       padding-bottom: var(--space-2xs);
     }
+    /* Item 6: the Group toggle was ~22px on mobile while every sibling control
+       is 44px; bring it up to a 44px touch target like the rest. */
     .year-toolbar__back,
     .year-pill,
-    .year-rarity {
+    .year-rarity,
+    .year-group__btn {
       min-height: 44px;
       padding-top: var(--space-2xs);
       padding-bottom: var(--space-2xs);
@@ -895,28 +944,15 @@
       padding-top: var(--space-2xs);
       padding-bottom: var(--space-2xs);
     }
-    /* Rarity chips + pills scroll horizontally instead of wrapping a wall,
-       with tighter row separation on phones to keep the sticky stack compact.
-       Item 12: a right-edge fade mask + a thin persistent scrollbar make it
-       obvious the row scrolls (the last chip, e.g. "Mythic", was clipping with
-       NO affordance). The fade is a narrow ~28px right gradient; padding-right
-       keeps the last chip off the very edge so it stays readable at scroll end.
-       scroll-padding-right keeps a snapped/last chip clear of the fade too. */
+    /* The single-row horizontal-scroll + right-edge fade-mask treatment now
+       lives in the <=900px block above (Item 5) so tablets get it too; here we
+       only add the tighter PHONE row separation to keep the sticky stack short.
+       Item 12 (fade mask + thin scrollbar) is preserved by that shared block. */
     .year-toolbar__rarity,
     .year-toolbar__pills {
-      flex-wrap: nowrap;
-      overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
-      scrollbar-width: thin;
       margin-top: var(--space-3xs);
       padding-top: var(--space-3xs);
-      padding-right: var(--space-md);
-      scroll-padding-right: var(--space-md);
-      -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
-      mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
     }
-    .year-pill,
-    .year-rarity { flex: 0 0 auto; }
     /* Trim the rarity chip side padding a touch so all 5 (All..Mythic) fit a
        390px viewport before any scroll is needed (Item 12). */
     .year-rarity {

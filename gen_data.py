@@ -10,7 +10,7 @@ BULK = os.environ.get("BULK", "default-cards.json")  # Scryfall default_cards bu
 OUT = os.environ.get("OUT", "build/data")
 
 CATEGORY_ORDER = ["Legendary Creatures", "Creatures", "Planeswalkers", "Artifacts",
-                  "Enchantments", "Instants", "Sorceries", "Lands", "Other"]
+                  "Enchantments", "Instants", "Sorceries", "Lands", "Art Cards", "Other"]
 
 def categorize(tl):
     leg = "Legendary" in tl
@@ -45,7 +45,7 @@ by_year = defaultdict(lambda: defaultdict(list))
 year_sets = defaultdict(set)
 year_value = defaultdict(float)
 year_title = {}  # year -> (value, record)
-year_setinfo = defaultdict(lambda: defaultdict(lambda: {"name": "", "count": 0, "topval": -1.0, "art": "", "top": ""}))  # year -> set -> top-card + counts
+year_setinfo = defaultdict(lambda: defaultdict(lambda: {"name": "", "count": 0, "topval": -1.0, "art": "", "top": "", "topval2": -1.0, "art2": "", "top2": ""}))  # year -> set -> top-card (+ distinct-art runner-up) + counts
 
 with open(BULK) as f:
     for line in f:
@@ -63,24 +63,38 @@ with open(BULK) as f:
             continue
         year = rel[:4]
         small, normal, art, back = imgs(c)
+        faces = c.get("card_faces") or []
+        # Double-faced cards carry no top-level type_line; fall back to the FRONT face's
+        # type so a DFC creature lands under Creatures, not the catch-all "Other" bucket.
+        tl = c.get("type_line") or (faces[0].get("type_line", "") if faces else "")
         usd, usdf = c.get("prices", {}).get("usd"), c.get("prices", {}).get("usd_foil")
         val = max(fval(usd), fval(usdf))
         rec = {
             "n": c.get("name", ""), "s": c.get("set", ""), "cn": c.get("collector_number", ""),
-            "t": c.get("type_line", ""), "m": c.get("mana_cost", "") or "",
+            "t": tl, "m": c.get("mana_cost", "") or "",
             "c": round(c.get("cmc", 0) or 0, 2),
             "r": c.get("rarity", ""), "p": usd, "pf": usdf,
             "img": small, "big": normal, "u": (c.get("scryfall_uri") or "").split("?")[0],
         }
         if back:
             rec["b2"] = back  # back face image (double-faced cards only)
-        by_year[year][categorize(rec["t"])].append(rec)
+        # Art-series collectibles type as "Card // Card" with no gameplay type; give them
+        # their own section instead of swelling the genuine Other (schemes, planes, tokens).
+        cat = "Art Cards" if (c.get("layout") == "art_series" or tl in ("Card", "Card // Card")) else categorize(tl)
+        by_year[year][cat].append(rec)
         year_sets[year].add(rec["s"])
         si = year_setinfo[year][rec["s"]]
         si["name"] = c.get("set_name") or rec["s"]
         si["count"] += 1
-        if art and val > si["topval"]:
-            si["topval"] = val; si["art"] = art; si["top"] = rec["n"]
+        if art:
+            if val > si["topval"]:
+                # Keep a distinct-art runner-up so sets that share a top card (e.g. the
+                # 1993 reprints all topping out at Black Lotus) can show different art.
+                if si["art"] and si["art"] != art:
+                    si["topval2"], si["art2"], si["top2"] = si["topval"], si["art"], si["top"]
+                si["topval"] = val; si["art"] = art; si["top"] = rec["n"]
+            elif art != si["art"] and val > si["topval2"]:
+                si["topval2"], si["art2"], si["top2"] = val, art, rec["n"]
         year_value[year] += fval(usd)  # nonfoil sum as the year's "market" figure
         # title card = highest single-card value, prefer one with art
         if year not in year_title or val > year_title[year][0]:
@@ -100,10 +114,19 @@ for year in sorted(by_year):
             continue
         cards.sort(key=lambda r: (r["n"].lower(), r["s"], r["cn"]))
         cat_blocks.append({"name": name, "count": len(cards), "cards": cards})
-    sets_list = sorted(
-        [{"code": k, "name": v["name"], "count": v["count"], "art": v["art"],
-          "top": v["top"], "value": round(max(v["topval"], 0.0), 2)} for k, v in year_setinfo[year].items()],
-        key=lambda x: (-x["count"], x["name"]))
+    # Build the set cards, deduping art: if a set's top-card art is already shown by an
+    # earlier (larger) set this year, fall back to its distinct-art runner-up so adjacent
+    # set cards stay visually distinct.
+    sets_list = []
+    used_art = set()
+    for k, v in sorted(year_setinfo[year].items(), key=lambda kv: (-kv[1]["count"], kv[1]["name"])):
+        art_c, top_c, val_c = v["art"], v["top"], v["topval"]
+        if art_c and art_c in used_art and v["art2"]:
+            art_c, top_c, val_c = v["art2"], v["top2"], v["topval2"]
+        if art_c:
+            used_art.add(art_c)
+        sets_list.append({"code": k, "name": v["name"], "count": v["count"], "art": art_c,
+                          "top": top_c, "value": round(max(val_c, 0.0), 2)})
     with open(f"{OUT}/{year}.json", "w") as fo:
         json.dump({"year": year, "totalCards": total, "sets": sets_list, "categories": cat_blocks},
                   fo, separators=(",", ":"))

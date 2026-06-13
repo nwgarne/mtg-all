@@ -37,6 +37,17 @@
     align-items: stretch;
   }
 
+  /* DENSER ON WIDE SCREENS - auto-fill caps at 3 columns inside the
+     1152px (--wrap-wide) shell because 4 x 280 + gaps overflows its inner
+     width, so a 1440px monitor still only shows 3. Force a 4th column from
+     1280px up (columns land at ~260px, comfortably above the tile minimum).
+     The 1/2/3 auto-fill steps below 1280px are untouched. */
+  @media (min-width: 1280px) {
+    .year-grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
+
   /* Loading / error placeholder, mirrors deck-grid__loading. */
   .year-grid__status {
     grid-column: 1 / -1;
@@ -131,7 +142,13 @@
     border-color: var(--accent);
     transform: translateY(-2px);
     box-shadow: var(--accent-lift-md);
-    outline: none;
+  }
+  /* Keyboard focus (WCAG 2.4.7) must be unmistakable AND distinct from hover.
+     Hover only recolors the 1px border to gold; focus adds a real 2px accent
+     outline held off the tile so it reads as a ring, not just a border swap. */
+  .year-card:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
   }
   .year-card:hover::before,
   .year-card:focus-visible::before {
@@ -164,6 +181,7 @@
     top: var(--space-sm);
     left: var(--space-md);
     right: var(--space-md);
+    z-index: 1;
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-2xs);
@@ -177,6 +195,36 @@
     text-shadow:
       0 1px 2px oklch(0% 0 0 / 0.9),
       0 0 10px oklch(0% 0 0 / 0.7);
+  }
+
+  /* COUNTS BACKING PLATE (WCAG 1.4.3) - the 11px counts line measured only
+     ~3.2:1 over the lightest 2025/2026 art even with the ::after top scrim
+     and a text-shadow. A text-shadow does not raise measured contrast, so we
+     lay a dark plate directly behind the counts band: a top-anchored gradient
+     held at >=0.88 alpha through the band, fading out below it. This is
+     pinned to the counts box (not the whole tile) so it tracks the text and
+     guarantees >=4.5:1 over even pale artwork. Spans full tile width via
+     negative insets that cancel the band's own left/right inset. */
+  .year-card__counts::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    /* Cancel the band's own left/right inset so the plate spans the full
+       tile width, and pull up to the tile's top edge. */
+    left: calc(var(--space-md) * -1);
+    right: calc(var(--space-md) * -1);
+    top: calc(var(--space-sm) * -1);
+    /* Cover ~64px down from the tile top (the band sits at space-sm, so the
+       band's own height + that offset land inside this), holding >=0.88
+       alpha through the band before fading out so the art still breathes. */
+    height: 64px;
+    pointer-events: none;
+    background:
+      linear-gradient(to bottom,
+        oklch(7% 0.010 95 / 0.94) 0%,
+        oklch(7% 0.010 95 / 0.90) 56%,
+        oklch(8% 0.010 95 / 0.66) 82%,
+        transparent 100%);
   }
   .year-card__counts .sep {
     color: var(--accent);

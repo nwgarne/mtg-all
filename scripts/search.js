@@ -275,7 +275,9 @@
       price.appendChild(document.createTextNode(pfStr));
       price.appendChild(el('span', 'card-tile__foil', 'foil only'));
     } else {
-      price.appendChild(document.createTextNode('-'));
+      // No nonfoil AND no foil price: show a labeled "No price" instead of a bare "-"
+      // so the cell reads as intentional. (.card-tile__noprice styling is owned elsewhere.)
+      price.appendChild(el('span', 'card-tile__noprice', 'No price'));
     }
     row.appendChild(price);
 
@@ -286,6 +288,8 @@
   //  RESULTS OVERLAY
   // ============================================================
   var _overlay = null, _grid = null, _title = null, _count = null, _overlayOpen = false, _overlayOpener = null;
+  var _findInput = null;   // the in-overlay "search another card" field
+  var _resultsToken = 0;   // guards out-of-order printings responses (rapid in-overlay re-search)
   function ensureOverlay() {
     if (_overlay) return _overlay;
     var ov = el('div', 'mtg-find');
@@ -302,13 +306,39 @@
     _count = el('p', 'mtg-find__count', '');
     titleWrap.appendChild(_title);
     titleWrap.appendChild(_count);
+
+    // "Search another card" without leaving the overlay. It carries .mtg-search so it
+    // inherits the topbar field + autocomplete-menu styling, and wireCombobox() gives it
+    // the same debounced autocomplete, keyboard handling and clear (x). Picking a card
+    // reloads THIS overlay in place (reuse:true keeps focus here + the original opener,
+    // so closing still returns focus to the topbar). The input lives inside the dialog,
+    // so the existing focus trap already includes it.
+    var findWrap = el('div', 'mtg-find__search mtg-search');
+    _findInput = document.createElement('input');
+    _findInput.className = 'mtg-search__input';
+    _findInput.setAttribute('type', 'search');
+    _findInput.setAttribute('placeholder', 'Search another card');
+    _findInput.setAttribute('aria-label', 'Search another card');
+    _findInput.setAttribute('autocomplete', 'off');
+    _findInput.setAttribute('autocapitalize', 'off');
+    _findInput.setAttribute('autocorrect', 'off');
+    _findInput.setAttribute('spellcheck', 'false');
+    findWrap.appendChild(_findInput);
+
     var close = el('button', 'mtg-find__close', '×');
     close.setAttribute('type', 'button');
     close.setAttribute('aria-label', 'Close printings');
     close.addEventListener('click', closeResults);
     head.appendChild(titleWrap);
+    head.appendChild(findWrap);
     head.appendChild(close);
     panel.appendChild(head);
+
+    // Reuse all the autocomplete machinery; only the pick action differs: reload the
+    // open overlay in place rather than opening a fresh one.
+    wireCombobox(_findInput, {
+      onChoose: function (picked) { openResults(picked, null, { reuse: true }); }
+    });
 
     var body = el('div', 'mtg-find__body');
     _grid = el('div', 'mtg-find__grid');
@@ -324,9 +354,16 @@
     _overlay = ov;
     return ov;
   }
-  function openResults(name, opener) {
+  // opts.reuse === true means the overlay is ALREADY open and we are reloading it from the
+  // in-overlay "search another card" field: keep the original opener (so closing still
+  // returns focus to the topbar) and leave focus in the in-overlay input instead of
+  // snapping it to the close button.
+  function openResults(name, opener, opts) {
+    opts = opts || {};
+    var reuse = !!opts.reuse && _overlayOpen;
+    var my = ++_resultsToken;   // newest query wins; older in-flight responses are dropped
     var ov = ensureOverlay();
-    _overlayOpener = opener || null;
+    if (!reuse) _overlayOpener = opener || null;
     _title.textContent = name;
     _count.textContent = 'Loading printings…';
     _grid.textContent = '';
@@ -334,11 +371,16 @@
     ov.setAttribute('aria-hidden', 'false');
     document.documentElement.classList.add('mtg-find-lock');
     _overlayOpen = true;
-    var close = ov.querySelector('.mtg-find__close');
-    if (close) { try { close.focus(); } catch (e) {} }
+    if (!reuse) {
+      // Fresh open from the topbar: clear any stale text/menu left in the in-overlay
+      // field so it does not contradict the card now shown, then focus the close button.
+      if (_findInput && typeof _findInput._mtgReset === 'function') _findInput._mtgReset();
+      var close = ov.querySelector('.mtg-find__close');
+      if (close) { try { close.focus(); } catch (e) {} }
+    }
 
     allPrintings(name).then(function (cards) {
-      if (!_overlayOpen) return;
+      if (!_overlayOpen || my !== _resultsToken) return;   // overlay closed or superseded
       // Scryfall's exact-name match also returns double-faced cards whose BACK face
       // carries this name (e.g. "Emeritus of Conflict // Lightning Bolt" for a
       // "Lightning Bolt" search), which would render a differently-named front face
@@ -370,7 +412,7 @@
       _grid.textContent = '';
       _grid.appendChild(frag);
     }).catch(function () {
-      if (!_overlayOpen) return;
+      if (!_overlayOpen || my !== _resultsToken) return;
       _count.textContent = 'Search is unavailable right now. Try again in a moment.';
     });
   }
@@ -389,11 +431,17 @@
   // ============================================================
   //  AUTOCOMPLETE MENU
   // ============================================================
-  function wire(input) {
+  // wireCombobox adds the WAI-ARIA combobox + autocomplete menu behavior to an input.
+  // Both the topbar search and the in-overlay "search another card" field use it, so the
+  // debounced menu, keyboard handling, clear (x) and ARIA are defined once. The only
+  // difference is what happens when a card is picked: opts.onChoose(name) (defaults to
+  // opening the results overlay for that card).
+  function wireCombobox(input, opts) {
+    opts = opts || {};
     // Unique id base so the listbox + its options can be referenced by ARIA
     // (aria-controls / aria-activedescendant) even if more than one search ever
     // mounts on a page.
-    var uid = 'mtg-search-' + (++wire._seq);
+    var uid = 'mtg-search-' + (++wireCombobox._seq);
     var menuId = uid + '-menu';
 
     var menu = el('div', 'mtg-search__menu');
@@ -509,7 +557,10 @@
       input.value = name;
       updateClear();
       hideMenu();
-      openResults(name, input);
+      // Default action: open the printings overlay for the picked card. The overlay's
+      // own field overrides this to reload the open overlay in place (see boot/ensureOverlay).
+      if (typeof opts.onChoose === 'function') opts.onChoose(name, input);
+      else openResults(name, input);
     }
 
     var run = debounce(function (term) {
@@ -547,8 +598,13 @@
     // The form should never actually submit/navigate.
     var form = input.closest('form');
     if (form) form.addEventListener('submit', function (ev) { ev.preventDefault(); });
+
+    // Expose a reset so the overlay can blank its in-overlay field (and close any open
+    // menu) when it reopens for a different card from the topbar. Reuses this closure's
+    // own hideMenu/updateClear so nothing is duplicated.
+    input._mtgReset = function () { input.value = ''; token++; updateClear(); hideMenu(); };
   }
-  wire._seq = 0;   // per-mount counter for unique listbox/option ids
+  wireCombobox._seq = 0;   // per-mount counter for unique listbox/option ids
 
   // ---- one document-level Escape handler for both layers ----
   document.addEventListener('keydown', function (ev) {
@@ -560,7 +616,7 @@
   // ---- boot ----
   function boot() {
     var input = document.querySelector('.mtg-search__input');
-    if (input) wire(input);
+    if (input) wireCombobox(input);   // topbar field: default onChoose opens the overlay
   }
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', boot);
