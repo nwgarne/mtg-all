@@ -80,7 +80,7 @@
 
     const title = y.title || null;
     const topName = title && title.name ? title.name : '';
-    const yearLabel = (title ? 'View ' + y.year + ' — top card ' + topName : 'View ' + y.year)
+    const yearLabel = (title ? 'View ' + y.year + ', top card ' + topName : 'View ' + y.year)
       + ', ' + pluralCards(y.cards) + ', ' + pluralSets(y.sets);
     card.setAttribute('aria-label', yearLabel);
 
