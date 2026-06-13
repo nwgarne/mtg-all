@@ -28,6 +28,44 @@
     margin-top: var(--space-md);
   }
 
+  /* ============================================================
+     HERO HEADLINE SPACING (Item 8)
+     ------------------------------------------------------------
+     year.js builds the H1 from adjacent spans with no whitespace
+     between the year stroke and the next word, so "2024" butted
+     straight into "EVERY" ("2024EVERY"). Add a small trailing gap
+     after the stroke span so it reads "2024 EVERY card.", matching
+     the homepage hero (which gets its space from inter-element
+     whitespace in the HTML). year.css only loads on the year pages,
+     so this never touches the homepage hero. Also covers the
+     empty/404 hero, which composes the same way.
+     ============================================================ */
+  .hero__title .hero__title-stroke {
+    margin-right: 0.2em;
+  }
+
+  /* ============================================================
+     VISUALLY-HIDDEN UTILITY (Item 4)
+     ------------------------------------------------------------
+     For the aria-live status node year.js appends to <body>. No
+     global .sr-only exists, so define the standard clip pattern
+     here: removed from view + layout but still read by AT. Kept
+     generic (not #year-grid-scoped) since the live node lives on
+     <body>, outside the grid.
+     ============================================================ */
+  .sr-only {
+    position: absolute !important;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
 
   /* ============================================================
      CONTROL BAR - Set scope + Sort selectors
@@ -140,6 +178,31 @@
     align-content: start;
   }
 
+  /* ============================================================
+     ACCORDION CHEVRON STATE (Item 3)
+     ------------------------------------------------------------
+     year.js writes a "▾" glyph into .deck-cat__chev, but card-tile.css
+     ALSO paints a "-"/"+" via .deck-cat__chev::before, so the chevron
+     read as a doubled, never-rotating mark. On the year page suppress
+     that pseudo (only the ▾ shows) and ROTATE the ▾ when the category
+     is open, so open vs closed is obvious. The shared .deck-cat__chev
+     already transitions `transform`, and global reduced-motion zeroes
+     that transition, so this is a flip with no extra motion cost. The
+     ▾ already points "down" (closed = more below); flip to point up
+     when open. aria-expanded on the head carries the same state for AT.
+     ============================================================ */
+  #year-grid .deck-cat__chev {
+    /* Keep the rotation centered on the glyph box. */
+    display: inline-block;
+    line-height: 1;
+  }
+  #year-grid .deck-cat__chev::before {
+    content: none;
+  }
+  #year-grid .deck-cat:not(.is-collapsed) .deck-cat__chev {
+    transform: rotate(180deg);
+  }
+
   /* The category head is wrapped in an <h3> for the document outline +
      heading navigation (a11y). The heading must NOT form a box, or the
      sticky head would only stick within the (short) heading box instead of
@@ -151,7 +214,7 @@
   }
 
   /* Chunked-render loading note (perf). Shown inside an opening category's
-     body while ~100 tiles/frame mount; year.js clears it when the last
+     body while ~60 tiles/frame mount; year.js clears it when the last
      chunk lands. Spans the whole tile grid so it reads as one line. */
   #year-grid .deck-cat__loading {
     grid-column: 1 / -1;
@@ -163,6 +226,36 @@
     text-transform: uppercase;
     color: var(--bone-700);
     text-align: center;
+  }
+
+  /* ============================================================
+     FLAT (price-ranked) VIEW (Item 2)
+     ------------------------------------------------------------
+     "Group: Flat" renders the scope's cards (after the rarity
+     filter) as ONE grid sorted by the current Sort, capped at the
+     top 200 (year.js). The cap holds the render-on-expand DOM bound.
+     The grid reuses .deck-cat__body (so card-tile.css styles the
+     tiles); we only add the wrapper + the "Showing the top N..."
+     note above it. No em dashes (the note uses a period).
+     ============================================================ */
+  #year-grid .year-flat {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+  }
+  #year-grid .year-flat__note {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: var(--fs-label);
+    letter-spacing: var(--tracking-wider);
+    text-transform: uppercase;
+    color: var(--bone-700);
+  }
+  /* The flat grid is a plain (non-collapsing) .deck-cat__body: it keeps the
+     auto-fill tile grid from card-tile.css; align-content:start so a short
+     top-200 list packs from the top rather than stretching. */
+  #year-grid .year-flat__grid {
+    align-content: start;
   }
 
 
@@ -385,7 +478,9 @@
     gap: var(--space-3xs, 0.25rem);
     padding: var(--space-2xs) var(--space-sm);
     background: var(--ink-050);
-    border: 1px solid var(--rule-medium);
+    /* Resting border raised to --accent-rail (>=3:1) for WCAG 1.4.11 non-text
+       contrast; was --rule-medium (~1.6:1), missed in the prior pass (Item 13). */
+    border: 1px solid var(--accent-rail, var(--rule-strong));
     border-radius: var(--r-sm);
     color: var(--bone-900);
     font-family: var(--font-mono);
@@ -450,6 +545,69 @@
   .year-toolbar__sort .year-controls__select {
     width: auto;
     min-width: 11rem;
+  }
+
+  /* ============================================================
+     GROUP TOGGLE - "By type | Flat" segmented control (Item 2)
+     ------------------------------------------------------------
+     A 2-button segmented control sharing the toolbar's chip look.
+     The active mode carries .is-active (gold-wash) + aria-pressed,
+     matching the rarity-chip / jump-pill active treatment.
+     ============================================================ */
+  .year-toolbar__group {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2xs);
+    flex: 0 0 auto;
+  }
+  .year-toolbar__group-lbl {
+    font-family: var(--font-mono);
+    font-size: var(--fs-label);
+    letter-spacing: var(--tracking-widest);
+    text-transform: uppercase;
+    color: var(--bone-700);
+    white-space: nowrap;
+  }
+  /* Two buttons fused into one pill: a shared rail with an inner divider. */
+  .year-group {
+    display: inline-flex;
+    align-items: stretch;
+    border: 1px solid var(--accent-rail, var(--rule-strong));
+    border-radius: var(--r-pill, 999px);
+    overflow: hidden;
+  }
+  .year-group__btn {
+    display: inline-flex;
+    align-items: center;
+    padding: var(--space-3xs, 0.3rem) var(--space-sm);
+    background: var(--ink-050);
+    border: 0;
+    color: var(--bone-800);
+    font-family: var(--font-mono);
+    font-size: var(--fs-label);
+    letter-spacing: var(--tracking-wide);
+    text-transform: uppercase;
+    cursor: pointer;
+    white-space: nowrap;
+    transition:
+      background-color var(--dur-fast) var(--ease-out-quart),
+      color var(--dur-fast) var(--ease-out-quart);
+  }
+  .year-group__btn + .year-group__btn {
+    border-left: 1px solid var(--accent-rail, var(--rule-strong));
+  }
+  .year-group__btn:hover {
+    background: var(--ink-150);
+    color: var(--bone-900);
+  }
+  .year-group__btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  .year-group__btn.is-active {
+    background: var(--accent-wash);
+    color: var(--accent-bright, var(--accent));
+    font-weight: var(--fw-body-strong, 500);
   }
 
   /* Row 2: RARITY filter chips. A run of toggle buttons (All / Common /
@@ -703,9 +861,15 @@
     .year-toolbar__sort {
       flex: 0 0 auto;
     }
-    /* Drop the "Sort" prefix on phones (the select's value is self-explanatory)
-       so back + label + sort share ONE row, trimming the sticky stack. */
-    .year-toolbar__sort-lbl { display: none; }
+    /* Drop the "Sort" + "Group" prefixes on phones (the controls are
+       self-explanatory) so the row stays compact, trimming the sticky stack. */
+    .year-toolbar__sort-lbl,
+    .year-toolbar__group-lbl { display: none; }
+    /* Compact the group toggle's buttons to match the tighter phone row. */
+    .year-group__btn {
+      padding-left: var(--space-xs);
+      padding-right: var(--space-xs);
+    }
     /* Item 6: WCAG 2.5.5 / touch-friendly - 44px min-height on the toolbar
        controls + the accordion head, with vertical padding. */
     .year-toolbar__sort .year-controls__select {
@@ -732,7 +896,12 @@
       padding-bottom: var(--space-2xs);
     }
     /* Rarity chips + pills scroll horizontally instead of wrapping a wall,
-       with tighter row separation on phones to keep the sticky stack compact. */
+       with tighter row separation on phones to keep the sticky stack compact.
+       Item 12: a right-edge fade mask + a thin persistent scrollbar make it
+       obvious the row scrolls (the last chip, e.g. "Mythic", was clipping with
+       NO affordance). The fade is a narrow ~28px right gradient; padding-right
+       keeps the last chip off the very edge so it stays readable at scroll end.
+       scroll-padding-right keeps a snapped/last chip clear of the fade too. */
     .year-toolbar__rarity,
     .year-toolbar__pills {
       flex-wrap: nowrap;
@@ -741,12 +910,51 @@
       scrollbar-width: thin;
       margin-top: var(--space-3xs);
       padding-top: var(--space-3xs);
+      padding-right: var(--space-md);
+      scroll-padding-right: var(--space-md);
+      -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+      mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
     }
     .year-pill,
     .year-rarity { flex: 0 0 auto; }
+    /* Trim the rarity chip side padding a touch so all 5 (All..Mythic) fit a
+       390px viewport before any scroll is needed (Item 12). */
+    .year-rarity {
+      padding-left: var(--space-2xs);
+      padding-right: var(--space-2xs);
+    }
 
     /* The compact scope breadcrumb shrinks to fit the phone. */
     .year-scopebar__crumb { font-size: var(--fs-h3); }
     .year-scopebar__stats { font-size: var(--fs-caption); }
+  }
+
+
+  /* ============================================================
+     COARSE-POINTER TOUCH TARGETS (Item 11, WCAG 2.5.5)
+     ------------------------------------------------------------
+     The 44px hit areas above are gated to <=640px, so tablets and
+     touch-laptops at 641px+ dropped back to ~24px chips/pills. Apply
+     the same 44px min-height (with vertical padding) on ANY coarse-
+     pointer / no-hover device, regardless of width, so every touch
+     device keeps large targets. Mouse/precise-pointer desktops are
+     unaffected and stay compact. Width-agnostic: no fixed control
+     widths here (those are a phone-layout concern), only sizing.
+     ============================================================ */
+  @media (hover: none), (pointer: coarse) {
+    .year-toolbar__back,
+    .year-pill,
+    .year-rarity,
+    .year-group__btn,
+    .year-toolbar__sort .year-controls__select {
+      min-height: 44px;
+      padding-top: var(--space-2xs);
+      padding-bottom: var(--space-2xs);
+    }
+    #year-grid .deck-cat__head {
+      min-height: 44px;
+      padding-top: var(--space-2xs);
+      padding-bottom: var(--space-2xs);
+    }
   }
 }

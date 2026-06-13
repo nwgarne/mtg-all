@@ -8,6 +8,21 @@
    Layering: menu + overlay at --z-overlay, the zoom at --z-lightbox.
    ============================================================ */
 
+/* Visually-hidden but screen-reader-available. Used by search.js for its polite
+   live region (status announcements). No global .sr-only exists, so it lives here. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 /* --- Search box in the topbar --- */
 .mtg-search {
   position: relative;
@@ -28,7 +43,7 @@
      focus still reads distinctly via the added gold ring (box-shadow) below. */
   border: 1px solid var(--accent-rail);
   border-radius: 2px;
-  padding: 0.5rem 2.4rem 0.5rem 0.7rem;   /* right room for the 36px clear button */
+  padding: 0.5rem 2.4rem 0.5rem 0.7rem;   /* right room for the clear button's visible glyph */
   outline: none;
   appearance: none;
   -webkit-appearance: none;
@@ -44,9 +59,10 @@
 .mtg-search__input::-webkit-search-cancel-button { -webkit-appearance: none; }
 
 /* Custom clear (x): shown by search.js whenever the field has text.
-   The whole 36x36 padding-box is clickable (comfortable target for mouse, touch
-   and keyboard focus), while the hover fill is clipped to the smaller content box
-   via background-clip so the visible chrome stays compact and tasteful. */
+   The whole 44x44 padding-box is the clickable/focusable target (WCAG 2.5.5), while
+   the hover fill is clipped to the smaller content box via background-clip so the
+   visible chrome stays compact and tasteful (the larger padding only grows the hit
+   area, not the glyph). */
 .mtg-search__clear {
   position: absolute;
   top: 50%;
@@ -55,13 +71,13 @@
   display: none;
   place-items: center;
   box-sizing: border-box;
-  width: 36px;
-  height: 36px;
-  padding: 7px;
+  width: 44px;
+  height: 44px;
+  padding: 11px;
   background: transparent;
   background-clip: content-box;
   border: 0;
-  border-radius: 9px;
+  border-radius: 11px;
   color: var(--bone-500);
   font-size: 1.1rem;
   line-height: 1;
@@ -70,9 +86,10 @@
 }
 .mtg-search__clear.is-visible { display: grid; }
 .mtg-search__clear:hover { color: var(--bone-900); background: var(--ink-150); }
+/* Pull the focus ring in to hug the visible glyph, not the full 44px hit area. */
 .mtg-search__clear:focus-visible {
   outline: 1px solid var(--accent-rail);
-  outline-offset: -6px;
+  outline-offset: -11px;
   color: var(--bone-900);
 }
 
@@ -120,12 +137,13 @@
   background: var(--accent-wash);
   color: var(--bone-900);
 }
-/* Non-interactive "no results" row: muted + italic, no hover, not an option. */
+/* Non-interactive "no results" row: muted + italic, no hover, not an option.
+   --bone-700 (not -500) so the text clears WCAG 1.4.3 (>=4.5:1) on the ink-100 menu. */
 .mtg-search__msg {
   display: block;
   width: 100%;
   padding: 0.6rem 0.85rem;
-  color: var(--bone-500);
+  color: var(--bone-700);
   font-family: var(--font-body);
   font-size: var(--fs-meta);
   font-style: italic;
@@ -190,10 +208,12 @@ html.mtg-find-lock { overflow: hidden; }
   text-transform: uppercase;
   color: var(--accent);
 }
+/* 44px square hit area on every viewport (WCAG 2.5.5); the x glyph stays tasteful
+   via the smaller font-size, padding is what supplies the comfortable target. */
 .mtg-find__close {
   flex: none;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   display: grid;
   place-items: center;
   background: var(--ink-100);
@@ -228,12 +248,7 @@ html.mtg-find-lock { overflow: hidden; }
     gap: var(--space-2xs);
   }
   .mtg-find__body { padding: var(--space-sm); }
-  /* Comfortable >=44px touch target for the overlay close on phones. */
-  .mtg-find__close {
-    width: 44px;
-    height: 44px;
-    font-size: 1.6rem;
-  }
+  /* (Close button is already a 44px target at every width; see base rule.) */
 }
 @media (max-width: 560px) {
   .mtg-search { flex-basis: 200px; }

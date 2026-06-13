@@ -27,7 +27,8 @@
     if (raw == null) return null;
     var v = parseFloat(raw);
     if (!isFinite(v)) return null;
-    return '$' + v.toFixed(2);
+    // Group thousands so a chase printing reads "$1,234.56" not "$1234.56".
+    return '$' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
   function debounce(fn, ms) {
     var t = null;
@@ -124,6 +125,33 @@
       b2: back,
       u: (card.scryfall_uri || '').split('?')[0]
     };
+  }
+
+  // ---- live region (WCAG 4.1.3) ----
+  // One visually-hidden polite status node, shared by the whole module, so SR users
+  // hear "no matches" and the printings count without a visible status line. Toggling
+  // textContent between identical strings would not re-announce, so we blank-then-set.
+  var _live = null;
+  function ensureLive() {
+    if (_live) return _live;
+    var n = el('div', 'sr-only');
+    n.setAttribute('role', 'status');
+    n.setAttribute('aria-live', 'polite');
+    n.setAttribute('aria-atomic', 'true');
+    document.body.appendChild(n);
+    _live = n;
+    return n;
+  }
+  function announce(msg) {
+    var n = ensureLive();
+    n.textContent = '';
+    // Re-set on the next frame so assistive tech registers a change even when the
+    // new message equals the previous one.
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(function () { n.textContent = msg; });
+    } else {
+      n.textContent = msg;
+    }
   }
 
   // ============================================================
@@ -334,6 +362,9 @@
       var label = 'Printed in ' + nSets + ' set' + (nSets === 1 ? '' : 's');
       if (nPr !== nSets) label += ' · ' + nPr + ' printings';
       _count.textContent = label;
+      // Announce the loaded result to SR users (always spell out both counts).
+      announce(name + ': printed in ' + nSets + ' set' + (nSets === 1 ? '' : 's') +
+        ', ' + nPr + ' printing' + (nPr === 1 ? '' : 's') + '.');
       var frag = document.createDocumentFragment();
       for (var j = 0; j < recs.length; j++) frag.appendChild(printingTile(recs[j]));
       _grid.textContent = '';
@@ -422,7 +453,12 @@
       names = [];
       active = -1;
       var msg = el('div', 'mtg-search__msg', text);
+      // The visible row is itself a polite status so it is announced in place...
+      msg.setAttribute('role', 'status');
       menu.appendChild(msg);
+      // ...and mirror it to the shared live region (the menu can be aria-hidden or
+      // skipped by some SR/browser pairings, so this guarantees the announcement).
+      announce(text);
       menu.classList.add('is-open');
       menu.setAttribute('aria-hidden', 'false');
       input.setAttribute('aria-expanded', 'true');

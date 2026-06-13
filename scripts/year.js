@@ -64,12 +64,17 @@
     if (!isFinite(n)) n = 0;
     return '$' + Math.round(n).toLocaleString('en-US');
   }
-  // A single price string -> "$12.50" (two decimals); null/garbage -> null.
+  // A single price string -> "$12.50" (two decimals, thousands grouped:
+  // 2249.99 -> "$2,249.99"); null/garbage -> null. Grouping matches the
+  // hero stat + the homepage caption so big prices read consistently (Item 7).
   function fmtPrice(raw) {
     if (raw == null) return null;
     var v = parseFloat(raw);
     if (!isFinite(v)) return null;
-    return '$' + v.toFixed(2);
+    return '$' + v.toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
   }
   // Whole-dollar price for the set-card caption: 2299.99 -> "$2,300"; junk -> ''.
   function fmtWhole(raw) {
@@ -402,6 +407,35 @@
   // head's aria-controls (Item 9), even across re-renders.
   var _catUid = 0;
 
+  // ============================================================
+  //  LIVE REGION (a11y - WCAG 4.1.3)  (Item 4)
+  //  A single visually-hidden polite status node. Sighted users see
+  //  the breadcrumb/toolbar change; screen-reader users get the same
+  //  result-count change announced here on rarity/sort/scope/group
+  //  changes. Created once and reused (like the lightbox singleton).
+  // ============================================================
+  var _live = null;
+  function ensureLiveRegion() {
+    if (_live) return _live;
+    var n = el('div', 'sr-only');
+    n.setAttribute('role', 'status');
+    n.setAttribute('aria-live', 'polite');
+    n.setAttribute('aria-atomic', 'true');
+    document.body.appendChild(n);
+    _live = n;
+    return n;
+  }
+  // Announce a short summary. Re-setting identical text would not re-fire the
+  // announcement, so clear first when the message repeats.
+  function announce(msg) {
+    var n = ensureLiveRegion();
+    if (n.textContent === msg) n.textContent = '';
+    n.textContent = msg;
+  }
+  function unmountLiveRegion() {
+    if (_live) { _live.textContent = ''; }
+  }
+
   // ----- Chunked tile render (perf) -----
   // A single open category can hold ~4,500 tiles; mounting them in one task
   // blocks the main thread for seconds (looks hung). Instead we append in
@@ -410,13 +444,62 @@
   // instant the user collapses or switches category, so stale chunks (and the
   // wrong category's tiles) are never appended. Render-on-expand is preserved:
   // still only the open category's tiles ever touch the DOM.
-  var TILE_CHUNK = 100;
+  // ~60 tiles/frame: a smaller per-frame task than 100 so each chunk's work
+  // stays well under a frame budget on slow CPUs, keeping the mount smooth
+  // (Item 10). Everything else about the chunked render is unchanged.
+  var TILE_CHUNK = 60;
   var _renderToken = 0;
   var _renderRAF = 0;
+
+  // The body whose reserved min-height is live, so any in-flight reservation
+  // can be released the instant a render is cancelled (collapse / switch).
+  var _reservedBody = null;
+  function releaseReservedHeight() {
+    if (_reservedBody) {
+      _reservedBody.style.minHeight = '';
+      _reservedBody = null;
+    }
+  }
+
+  // CLS GUARD (Item 9): reserve a tile grid's FINAL height before its tiles
+  // mount, so the body occupies its full size from its first painted frame and
+  // the chunked appends fill into already-reserved space instead of growing the
+  // body chunk-by-chunk (which would re-shift every collapsed sibling header
+  // below it on each frame). The estimate is derived, not hardcoded: columns
+  // from the body's content width + the grid step, row height from the card
+  // image's exact 488x680 aspect plus a small meta-row allowance. An imperfect
+  // estimate only matters during the brief load; it is cleared when the real
+  // content has landed (or the render is superseded), so final layout is exact.
+  function reserveBodyHeight(body, total) {
+    if (!body || total <= 0) return;
+    var GAP = 12;        // --space-xs (grid gap)
+    var PAD = 12;        // --space-xs (body padding, both sides)
+    var COL_MIN = 220;   // minmax(220px, 1fr)
+    // name + sub/price row + the tile's own gap/padding. Biased slightly high
+    // so we over-reserve rather than under-reserve: an over-estimate only
+    // trims (below the fold) when the real tiles land, whereas an under-
+    // estimate would let the body grow mid-mount. Image height is exact.
+    var META = 60;
+    var cw = body.clientWidth ||
+      (body.parentNode && body.parentNode.clientWidth) || 0;
+    if (cw <= 0) return; // can't estimate without a width; skip (no harm)
+    var inner = cw - PAD * 2;
+    var cols = Math.floor((inner + GAP) / (COL_MIN + GAP));
+    if (cols < 1) cols = 1;
+    var colW = (inner - GAP * (cols - 1)) / cols;
+    var tileH = (colW * 680 / 488) + META;   // image (exact aspect) + meta
+    var rows = Math.ceil(total / cols);
+    var estH = PAD * 2 + rows * tileH + GAP * (rows - 1);
+    if (isFinite(estH) && estH > 0) {
+      body.style.minHeight = Math.round(estH) + 'px';
+      _reservedBody = body;
+    }
+  }
 
   // Bumping the token cancels whatever chunked render is in flight.
   function cancelChunkedRender() {
     _renderToken++;
+    releaseReservedHeight();             // drop any height reservation too
     if (_renderRAF) {
       if (typeof cancelAnimationFrame === 'function') {
         try { cancelAnimationFrame(_renderRAF); } catch (e) {}
@@ -426,8 +509,10 @@
   }
 
   // Render `cards` into `body` a chunk at a time. `note` (optional) is a
-  // "Loading N cards..." element removed when the last chunk lands.
-  function renderTilesChunked(body, cards, note) {
+  // "Loading N cards..." element removed when the last chunk lands. `reserve`
+  // (optional, default true) pre-reserves the body's final height so the
+  // chunked growth does not re-shift sibling headers (Item 9 CLS guard).
+  function renderTilesChunked(body, cards, note, reserve) {
     cancelChunkedRender();               // invalidate any prior in-flight render
     var token = _renderToken;
     var total = cards.length;
@@ -438,6 +523,9 @@
       body.appendChild(frag0);
       return;
     }
+    // Reserve the full height up front (before chunk 1 paints) so siblings
+    // settle once. Default on; callers can pass reserve === false to skip.
+    if (reserve !== false) reserveBodyHeight(body, total);
     var i = 0;
     var step = function () {
       _renderRAF = 0;
@@ -455,8 +543,13 @@
           _renderRAF = 0;
           setTimeout(step, 16);
         }
-      } else if (note && note.parentNode) {
-        note.parentNode.removeChild(note);  // done: clear the loading note
+      } else {
+        // Done: the real tiles now define the height; drop the reservation so
+        // the final layout is exact (no leftover min-height).
+        if (_reservedBody === body) releaseReservedHeight();
+        if (note && note.parentNode) {
+          note.parentNode.removeChild(note);  // clear the loading note
+        }
       }
     };
     step();                              // first chunk paints in this frame
@@ -1029,15 +1122,31 @@
   // ============================================================
   //  SCOPE VIEW - sticky toolbar + the type accordion
   // ============================================================
-  // onChange() is fired whenever the sort OR the rarity filter changes; the
-  // caller (renderScope.apply) re-derives + repaints. The pill registry
-  // (catPills) is rebuilt here so syncActivePills can flag the open type.
+  // Map a sort key to a short phrase for labels / the live region.
+  var SORT_PHRASE = {
+    name: 'name', price: 'price', rarity: 'rarity', cmc: 'mana value'
+  };
+  function sortPhrase(key) { return SORT_PHRASE[key] || 'name'; }
+
+  // The two grouping modes (Item 2). 'type' = the type accordion (default);
+  // 'flat' = one price-ranked list of the scope's cards (top 200).
+  var GROUP_OPTIONS = [
+    { value: 'type', label: 'By type' },
+    { value: 'flat', label: 'Flat' }
+  ];
+  var FLAT_CAP = 200;
+
+  // onChange() is fired whenever the sort, rarity filter, OR grouping mode
+  // changes; the caller (renderScope.apply) re-derives + repaints. The pill
+  // registry (catPills) is rebuilt here so syncActivePills can flag the open
+  // type (it is left empty in flat mode, where the pills are hidden).
   function buildToolbar(ctx, state, derived, onChange) {
     var bar = el('div', 'year-toolbar');
     bar.setAttribute('role', 'group');
     bar.setAttribute('aria-label', 'Scope controls');
+    var isFlat = state.group === 'flat';
 
-    // Row 1: back button + scope label + sort.
+    // Row 1: back button + scope label + group toggle + sort.
     var topRow = el('div', 'year-toolbar__row');
 
     var back = el('button', 'year-toolbar__back');
@@ -1048,21 +1157,47 @@
     back.addEventListener('click', function () { clearHash(); });
     topRow.appendChild(back);
 
-    // Scope label: "All cards" or "<Set name> - <n> cards".
+    // Scope label: just the scope NAME (the breadcrumb already carries the
+    // count, so duplicating it here only truncated on mobile) (Item 5).
     var label = el('div', 'year-toolbar__label');
-    if (state.scope) {
-      label.textContent = (ctx.setName(state.scope) || state.scope.toUpperCase()) +
-        ' - ' + fmtInt(ctx.scopeCount(state.scope)) + ' cards';
-    } else {
-      label.textContent = 'All cards - ' + fmtInt(ctx.totalCards) + ' cards';
-    }
+    label.textContent = state.scope
+      ? (ctx.setName(state.scope) || state.scope.toUpperCase())
+      : 'All cards';
+    label.setAttribute('title', label.textContent);
     topRow.appendChild(label);
 
-    // Sort select.
+    // Group toggle: "By type | Flat" (Item 2). A 2-button segmented control;
+    // the active mode carries aria-pressed="true" + .is-active. CSP-safe.
+    var groupField = el('div', 'year-toolbar__group');
+    groupField.setAttribute('role', 'group');
+    groupField.setAttribute('aria-label', 'Group cards');
+    groupField.appendChild(el('span', 'year-toolbar__group-lbl', 'Group'));
+    var groupBtns = el('div', 'year-group');
+    for (var gi = 0; gi < GROUP_OPTIONS.length; gi++) {
+      (function (opt) {
+        var gb = el('button', 'year-group__btn', opt.label);
+        gb.setAttribute('type', 'button');
+        gb.setAttribute('data-group', opt.value);
+        var on = (state.group || 'type') === opt.value;
+        gb.setAttribute('aria-pressed', on ? 'true' : 'false');
+        if (on) gb.classList.add('is-active');
+        gb.addEventListener('click', function () {
+          if ((state.group || 'type') === opt.value) return; // no-op re-click
+          state.group = opt.value;
+          state._refocus = { kind: 'group', value: opt.value };
+          onChange();
+        });
+        groupBtns.appendChild(gb);
+      })(GROUP_OPTIONS[gi]);
+    }
+    groupField.appendChild(groupBtns);
+    topRow.appendChild(groupField);
+
+    // Sort select. The visible "Sort" text is the accessible name via the
+    // wrapping <label>; no redundant aria-label on the select (Item 6).
     var sortField = el('label', 'year-toolbar__sort');
     sortField.appendChild(el('span', 'year-toolbar__sort-lbl', 'Sort'));
     var sortSel = el('select', 'year-controls__select');
-    sortSel.setAttribute('aria-label', 'Sort cards within each type');
     for (var k = 0; k < SORT_OPTIONS.length; k++) {
       var so = SORT_OPTIONS[k];
       var sopt = el('option', null, so.label);
@@ -1072,6 +1207,7 @@
     sortSel.value = state.sort;
     sortSel.addEventListener('change', function () {
       state.sort = sortSel.value;
+      state._refocus = { kind: 'sort' };
       onChange();
     });
     sortField.appendChild(sortSel);
@@ -1082,7 +1218,7 @@
     // Row 2: rarity filter chips (All / Common / Uncommon / Rare / Mythic).
     // Filters the cards within the open scope across every type category by
     // re-deriving on the FULL arrays; the active sort + auto-open are kept
-    // by renderAccordion (Item 5). CSP-safe: wired via addEventListener.
+    // by renderAccordion. CSP-safe: wired via addEventListener.
     var rarityRow = el('div', 'year-toolbar__rarity');
     rarityRow.setAttribute('role', 'group');
     rarityRow.setAttribute('aria-label', 'Filter by rarity');
@@ -1103,6 +1239,9 @@
         chip.addEventListener('click', function () {
           if (state.rarity === opt.value) return; // no-op re-click
           state.rarity = opt.value;
+          // Item 1: re-render dumps focus to <body>; remember which chip the
+          // user just hit so apply() can hand focus back to its rebuilt twin.
+          state._refocus = { kind: 'rarity', value: opt.value };
           onChange();
         });
         rarityRow.appendChild(chip);
@@ -1112,8 +1251,9 @@
 
     // Row 3: type jump-pills (one per non-empty type in this scope). Each pill
     // is registered into catPills so syncActivePills can mark the open type.
+    // HIDDEN in flat mode: there are no type sections to jump to (Item 2).
     catPills = [];
-    if (derived.length) {
+    if (!isFlat && derived.length) {
       var pills = el('div', 'year-toolbar__pills');
       pills.setAttribute('aria-label', 'Jump to type');
       for (var i = 0; i < derived.length; i++) {
@@ -1135,6 +1275,104 @@
     return bar;
   }
 
+  // After the toolbar is rebuilt, hand keyboard focus back to the control the
+  // user just operated (its old node was replaced, dumping focus to <body>).
+  // Item 1 (rarity is the WCAG-flagged case); group + sort kept consistent.
+  function restoreToolbarFocus(bar, state) {
+    var want = state._refocus;
+    state._refocus = null;
+    if (!want || !bar) return;
+    var target = null;
+    if (want.kind === 'rarity') {
+      target = bar.querySelector('.year-rarity--' + want.value);
+    } else if (want.kind === 'group') {
+      target = bar.querySelector('.year-group__btn[data-group="' + want.value + '"]');
+    } else if (want.kind === 'sort') {
+      target = bar.querySelector('.year-controls__select');
+    }
+    if (target && typeof target.focus === 'function') {
+      try { target.focus(); } catch (e) {}
+    }
+  }
+
+  // Item 4: build + push a concise live-region summary of the current view
+  // (count, rarity, sort, and grouping) for screen-reader users.
+  function announceState(ctx, state, derived) {
+    var count = 0;
+    for (var i = 0; i < derived.length; i++) {
+      count += derived[i].count != null ? derived[i].count
+        : (derived[i].cards ? derived[i].cards.length : 0);
+    }
+    var rarity = (state.rarity && state.rarity !== 'all') ? (state.rarity + ' ') : '';
+    var noun = (count === 1 ? 'card' : 'cards');
+    var msg;
+    if (state.group === 'flat') {
+      if (count > FLAT_CAP) {
+        msg = 'Showing the top ' + fmtInt(FLAT_CAP) + ' of ' + fmtInt(count) +
+          ' ' + rarity + noun + ' by ' + sortPhrase(state.sort) + '.';
+      } else {
+        msg = 'Showing ' + fmtInt(count) + ' ' + rarity + noun +
+          ' by ' + sortPhrase(state.sort) + '.';
+      }
+    } else {
+      msg = 'Showing ' + fmtInt(count) + ' ' + rarity + noun +
+        ', sorted by ' + sortPhrase(state.sort) + '.';
+    }
+    announce(msg);
+  }
+
+  // ----- FLAT (price-ranked) render (Item 2) -----
+  // One chunked grid of the scope's cards (after the rarity filter), sorted by
+  // the current Sort, CAPPED at the top FLAT_CAP. The cap PRESERVES the
+  // render-on-expand DOM bound (the DOM never holds thousands of tiles). The
+  // accordion bookkeeping is torn down so the single-open invariant + pill
+  // sync stay coherent when toggling back to type mode.
+  function renderFlat(gridEl, derivedCats, state) {
+    // Any in-flight accordion render is for the old block set; stop it and
+    // clear the parallel arrays so a late frame can't write into a dead body.
+    cancelChunkedRender();
+    catHeads = []; catWraps = []; catBodies = []; catCards = []; catNames = [];
+    catPills = [];
+    openName = null;
+
+    // Concat the already scope+rarity-filtered categories, then sort the whole
+    // set by the current comparator and take the top FLAT_CAP.
+    var all = [];
+    for (var i = 0; i < derivedCats.length; i++) {
+      var cards = derivedCats[i].cards || [];
+      for (var j = 0; j < cards.length; j++) all.push(cards[j]);
+    }
+    var total = all.length;
+    all.sort(comparatorFor(state.sort));
+    var shown = all.length > FLAT_CAP ? all.slice(0, FLAT_CAP) : all;
+
+    gridEl.innerHTML = '';
+    if (!total) {
+      var empty = el('p', 'year-controls__empty',
+        'No cards in this set for the current view.');
+      gridEl.appendChild(empty);
+      return;
+    }
+
+    var wrap = el('div', 'year-flat');
+    var note = el('p', 'year-flat__note');
+    if (total > FLAT_CAP) {
+      note.textContent = 'Showing the top ' + fmtInt(FLAT_CAP) + ' of ' +
+        fmtInt(total) + ' by ' + sortPhrase(state.sort) + '.';
+    } else {
+      note.textContent = 'Showing all ' + fmtInt(total) +
+        (total === 1 ? ' card' : ' cards') + ' by ' + sortPhrase(state.sort) + '.';
+    }
+    wrap.appendChild(note);
+
+    var body = el('div', 'deck-cat__body year-flat__grid');
+    wrap.appendChild(body);
+    gridEl.appendChild(wrap);
+
+    // Reuse the chunked mount (<=200 tiles, smooth, height reserved).
+    renderTilesChunked(body, shown);
+  }
+
   function renderScope(ctx, host, state) {
     host.innerHTML = '';
 
@@ -1153,9 +1391,11 @@
     // set). Filtering runs on the FULL base arrays; render-on-expand + the
     // auto-open are preserved by renderAccordion.
     function apply() {
-      // Remember the chosen sort + rarity so they carry to the next scope.
+      // Remember the chosen sort + rarity + grouping so they carry to the
+      // next scope.
       ctx.lastSort = state.sort;
       ctx.lastRarity = state.rarity;
+      ctx.lastGroup = state.group;
       var derived = deriveCategories(ctx.baseCats, state.scope, state.sort, state.rarity);
 
       // Rebuild the scope readout so its count/value reflect the live filter.
@@ -1167,7 +1407,8 @@
       }
       readoutHolder.node = newReadout;
 
-      // Rebuild the toolbar so the chips/pills reflect the live derived set.
+      // Rebuild the toolbar so the chips/pills/group toggle reflect the live
+      // derived set.
       var newBar = buildToolbar(ctx, state, derived, apply);
       if (toolbarHolder.bar && toolbarHolder.bar.parentNode) {
         toolbarHolder.bar.parentNode.replaceChild(newBar, toolbarHolder.bar);
@@ -1176,9 +1417,24 @@
       }
       toolbarHolder.bar = newBar;
       watchToolbar(newBar);
-      renderAccordion(grid, derived);
-      // Reflect the (possibly auto-opened) category on the freshly built pills.
+
+      // Route to the chosen grouping. Flat mode renders one price-ranked,
+      // capped grid; type mode renders the accordion (render-on-expand +
+      // auto-open). Both keep the DOM tile bound (one category / top 200).
+      if (state.group === 'flat') {
+        renderFlat(grid, derived, state);
+      } else {
+        renderAccordion(grid, derived);
+      }
+      // Reflect the (possibly auto-opened) category on the freshly built pills
+      // (a no-op in flat mode, where there are no pills).
       syncActivePills();
+
+      // Item 1: hand focus back to the control the user just operated.
+      restoreToolbarFocus(newBar, state);
+
+      // Item 4: announce the live result/filter state to assistive tech.
+      announceState(ctx, state, derived);
     }
 
     host.appendChild(grid);
@@ -1206,6 +1462,8 @@
       // Tear down any scope-view chrome.
       unwatchToolbar();
       hideBackToTop();
+      unmountLiveRegion();   // clear any stale scope announcement (Item 4)
+      cancelChunkedRender(); // drop any in-flight tile mount + its reservation
       openName = null;
       host.innerHTML = '';
       host.appendChild(ctx.hero);
@@ -1222,7 +1480,8 @@
       var state = {
         scope: route.scope,
         sort: ctx.lastSort || 'name',
-        rarity: ctx.lastRarity || 'all'
+        rarity: ctx.lastRarity || 'all',
+        group: ctx.lastGroup || 'type'
       };
       renderScope(ctx, host, state);
       // Land at the top of the new scope view.
@@ -1317,7 +1576,8 @@
       matchSet: matchSet,
       lastScope: undefined,
       lastSort: 'name',
-      lastRarity: 'all'
+      lastRarity: 'all',
+      lastGroup: 'type'
     };
 
     openName = null;

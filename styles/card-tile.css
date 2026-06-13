@@ -342,7 +342,7 @@
     letter-spacing: var(--tracking-wider);
     line-height: 1;
     text-transform: uppercase;
-    color: var(--bone-500);
+    color: var(--bone-700);
   }
   /* Foil price: quieter secondary, on its own line under the prominent USD price. */
   .card-tile__foil {
@@ -354,7 +354,7 @@
     letter-spacing: var(--tracking-wide);
     line-height: 1;
     text-transform: none;
-    color: var(--bone-500);
+    color: var(--bone-700);
   }
 
 
@@ -553,7 +553,7 @@
   .card-lightbox__close {
     position: absolute;
     top: 20px; right: 24px;
-    width: 40px; height: 40px;
+    width: 44px; height: 44px;
     display: flex;
     align-items: center;
     justify-content: center;
