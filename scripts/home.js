@@ -1,5 +1,5 @@
 /*
- * home.js — MTG by year homepage.
+ * home.js - MTG by year homepage.
  * Fetches /data/years.json and renders the hero tagline (total card count)
  * plus a responsive grid of year cards, newest year first. Each card is a
  * full-bleed cover tile whose background is that year's highest-value card

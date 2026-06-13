@@ -1,5 +1,5 @@
 /*
- * year.js — MTG-by-year browser, one page per release year.
+ * year.js - MTG-by-year browser, one page per release year.
  * Reads the year from the URL path (/2024/ -> "2024"), fetches
  * /data/<year>.json, and renders every card from that year.
  *
@@ -47,7 +47,7 @@
   }
   function cap(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : ''; }
 
-  // First clause of a type line, e.g. "Legendary Creature — Dragon" -> "Legendary Creature".
+  // First clause of a type line (the part before the dash separator); yields e.g. "Legendary Creature".
   function shortType(typeLine) {
     if (!typeLine) return '';
     var split = typeLine.split(/\s+[—\-]\s+/);
@@ -225,7 +225,7 @@
     meta.appendChild(sub);
     row.appendChild(meta);
 
-    // Price — shown to everyone. nonfoil "$p", foil appended when present;
+    // Price - shown to everyone. nonfoil "$p", foil appended when present;
     // foil-only when p is null; "-" when both are null.
     var price = el('div', 'card-tile__price');
     price.setAttribute('role', 'cell');
@@ -677,7 +677,7 @@
   }
 
   // ============================================================
-  //  PICKER VIEW — the set cards grid (replaces the Set dropdown)
+  //  PICKER VIEW - the set cards grid (replaces the Set dropdown)
   //  Built to the homepage .year-card look (reused via home.css).
   //  First card "All cards"; then one card per `sets` entry. Clicking
   //  a card sets the hash, which the hashchange handler turns into the
@@ -761,7 +761,7 @@
       art: ctx.heroArt,
       topName: ctx.heroTopName,
       topValue: ctx.heroTopValue,
-      ariaLabel: 'All cards — ' + fmtInt(ctx.totalCards) + ' cards in ' + ctx.year
+      ariaLabel: 'All cards, ' + fmtInt(ctx.totalCards) + ' cards in ' + ctx.year
     }));
 
     // One card per set (already sorted by count in the data).
@@ -776,7 +776,7 @@
         art: s.art,
         topName: s.top,
         topValue: s.value,
-        ariaLabel: (s.name || code) + ' (' + code + ') — ' + fmtInt(s.count || 0) +
+        ariaLabel: (s.name || code) + ' (' + code + '), ' + fmtInt(s.count || 0) +
           ' cards' + (s.top ? ', top card ' + s.top : '')
       }));
     }
@@ -785,7 +785,7 @@
   }
 
   // ============================================================
-  //  SCOPE VIEW — sticky toolbar + the type accordion
+  //  SCOPE VIEW - sticky toolbar + the type accordion
   // ============================================================
   function buildToolbar(ctx, state, derived, onSortChange) {
     var bar = el('div', 'year-toolbar');
@@ -866,7 +866,7 @@
     var toolbarHolder = { bar: null };
 
     // Re-derive + repaint the accordion (and rebuild the toolbar pills,
-    // since the non-empty type set can change with scope — though within
+    // since the non-empty type set can change with scope - though within
     // a single scope view only the sort changes, the pills are stable).
     function apply() {
       // Remember the chosen sort so it carries to the next scope this session.
@@ -937,7 +937,7 @@
     hero.appendChild(kicker);
     var h1 = el('h1', 'hero__title');
     h1.appendChild(el('span', 'hero__title-stroke', 'YEAR'));
-    h1.appendChild(el('span', null, year || '—'));
+    h1.appendChild(el('span', null, year || '-'));
     hero.appendChild(h1);
     host.appendChild(hero);
 

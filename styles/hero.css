@@ -343,7 +343,7 @@
     outline: none;
   }
 
-  /* Commander image panel — left edge of every card */
+  /* Commander image panel - left edge of every card */
   .deck-card__image-wrap {
     position: relative;
     background: var(--ink-100);
