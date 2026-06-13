@@ -274,6 +274,20 @@
 
     allPrintings(name).then(function (cards) {
       if (!_overlayOpen) return;
+      // Scryfall's exact-name match also returns double-faced cards whose BACK face
+      // carries this name (e.g. "Emeritus of Conflict // Lightning Bolt" for a
+      // "Lightning Bolt" search), which would render a differently-named front face
+      // and inflate the count. Keep only cards that ARE this card - matched by full
+      // name or front-face name (so transform cards searched by their front, and
+      // DFCs searched by their full "A // B" name, are still kept).
+      if (cards && cards.length) {
+        var only = cards.filter(function (card) {
+          if (card.name === name) return true;
+          var f = card.card_faces;
+          return !!(f && f.length && f[0].name === name);
+        });
+        if (only.length) cards = only;
+      }
       if (!cards || !cards.length) { _count.textContent = 'No printings found.'; return; }
       var recs = cards.map(toRec);
       var sets = {};

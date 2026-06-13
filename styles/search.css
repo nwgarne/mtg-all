@@ -197,6 +197,15 @@ html.mtg-find-lock { overflow: hidden; }
 #mtg-find-lightbox { z-index: var(--z-lightbox); }
 
 /* --- Narrow screens: keep the search usable next to the wordmark --- */
+@media (max-width: 640px) {
+  /* Match the year page's 2-up tile grid (card-tile.css) so a long printing list
+     is not one tall single column on phones. */
+  .mtg-find__grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-2xs);
+  }
+  .mtg-find__body { padding: var(--space-sm); }
+}
 @media (max-width: 560px) {
   .mtg-search { flex-basis: 200px; }
   .mtg-search__input { font-size: var(--fs-label); letter-spacing: var(--tracking-normal); }
