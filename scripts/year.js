@@ -377,15 +377,24 @@
   function scrollToCat(idx) {
     if (idx < 0 || idx >= catHeads.length) return;
     var head = catHeads[idx];
-    if (head && typeof head.scrollIntoView === 'function') {
-      try { head.scrollIntoView({ block: 'start' }); return; } catch (e) {}
+    if (!head) return;
+    // Collapsing the previous (possibly multi-screen) section and expanding this
+    // one is a large reflow, and the browser's scroll anchoring shifts the
+    // viewport as content above changes. Measuring/scrolling synchronously lands
+    // on stale geometry, so the new section's top is missed. Defer to the next
+    // frame (layout settled), then scroll to the header's ABSOLUTE document
+    // position minus the live sticky stack so its top always parks at the top.
+    var doScroll = function () {
+      var off = stickyOffsetPx();
+      var top = head.getBoundingClientRect().top +
+                (window.pageYOffset || document.documentElement.scrollTop || 0);
+      try { window.scrollTo(0, Math.max(0, Math.round(top - off - 4))); } catch (e) {}
+    };
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(function () { requestAnimationFrame(doScroll); });
+    } else {
+      doScroll();
     }
-    // Fallback: window.scrollTo to the header top minus the sticky offset.
-    var off = stickyOffsetPx();
-    var y = 0;
-    var node = head;
-    while (node) { y += node.offsetTop || 0; node = node.offsetParent; }
-    try { window.scrollTo(0, Math.max(0, y - off)); } catch (e) {}
   }
 
   function toggle(idx, scroll) {
@@ -600,6 +609,9 @@
       try {
         var url = window.location.pathname + window.location.search;
         window.history.pushState(null, '', url);
+        // pushState never fires hashchange, so the router would not re-render
+        // and the picker would never come back. Dispatch one so showView runs.
+        window.dispatchEvent(new Event('hashchange'));
         return;
       } catch (e) {}
     }
