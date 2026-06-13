@@ -1,0 +1,179 @@
+/* ============================================================
+   CARD-NAME SEARCH (search.js)
+   ------------------------------------------------------------
+   A search box in the topbar (every page) with an autocomplete
+   menu, plus a full-screen results overlay listing every printing
+   of the chosen card. Printing tiles reuse .card-tile (card-tile.css)
+   and the zoom reuses .card-lightbox, so only the chrome lives here.
+   Layering: menu + overlay at --z-overlay, the zoom at --z-lightbox.
+   ============================================================ */
+
+/* --- Search box in the topbar --- */
+.mtg-search {
+  position: relative;
+  margin-left: auto;            /* sit at the right edge of the topbar wrap */
+  display: flex;
+  align-items: center;
+  flex: 0 1 320px;
+  min-width: 0;
+}
+.mtg-search__input {
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  letter-spacing: var(--tracking-wide);
+  color: var(--bone-800);
+  background: var(--ink-000);
+  border: 1px solid var(--rule-medium);
+  border-radius: 2px;
+  padding: 0.5rem 0.7rem;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.mtg-search__input::placeholder { color: var(--bone-500); }
+.mtg-search__input:focus {
+  border-color: var(--accent-rail);
+  box-shadow: 0 0 0 1px var(--accent-rail);
+}
+/* Drop the native search clear/decoration so it reads as one editorial field. */
+.mtg-search__input::-webkit-search-decoration,
+.mtg-search__input::-webkit-search-cancel-button { -webkit-appearance: none; }
+
+/* --- Autocomplete menu --- */
+.mtg-search__menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  left: auto;
+  min-width: 100%;
+  max-width: min(380px, 92vw);
+  max-height: 60vh;
+  overflow-y: auto;
+  background: var(--ink-100);
+  border: 1px solid var(--rule-strong);
+  border-radius: 3px;
+  box-shadow: 0 16px 40px oklch(0% 0 0 / 0.5);
+  z-index: calc(var(--z-overlay) + 5);
+  display: none;
+}
+.mtg-search__menu.is-open { display: block; }
+.mtg-search__opt {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--rule-soft);
+  color: var(--bone-800);
+  font-family: var(--font-body);
+  font-size: var(--fs-body-sm);
+  line-height: 1.3;
+  padding: 0.55rem 0.75rem;
+  cursor: pointer;
+  transition: background-color 0.1s ease, color 0.1s ease;
+}
+.mtg-search__opt:last-child { border-bottom: 0; }
+.mtg-search__opt:hover,
+.mtg-search__opt.is-active {
+  background: var(--accent-wash);
+  color: var(--bone-900);
+}
+
+/* --- Results overlay --- */
+.mtg-find {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-overlay);
+  display: none;
+  align-items: flex-start;
+  justify-content: center;
+  padding: clamp(0.5rem, 4vh, 3rem) clamp(0.5rem, 4vw, 2rem);
+  background: oklch(8% 0.008 95 / 0.78);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.mtg-find.is-open { display: flex; }
+html.mtg-find-lock { overflow: hidden; }
+
+.mtg-find__panel {
+  width: min(1100px, 100%);
+  max-height: calc(100vh - 2 * clamp(0.5rem, 4vh, 3rem));
+  display: flex;
+  flex-direction: column;
+  background: var(--ink-050);
+  border: 1px solid var(--rule-strong);
+  border-radius: 4px;
+  box-shadow: 0 30px 80px oklch(0% 0 0 / 0.6);
+}
+.mtg-find__head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-md) var(--space-sm);
+  background: var(--ink-050);
+  border-bottom: 1px solid var(--rule-medium);
+  border-radius: 4px 4px 0 0;
+}
+.mtg-find__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: var(--fw-display-bold, 700);
+  font-size: var(--fs-h2);
+  line-height: var(--lh-snug);
+  letter-spacing: var(--tracking-tight);
+  color: var(--bone-900);
+}
+.mtg-find__count {
+  margin: var(--space-3xs) 0 0;
+  font-family: var(--font-mono);
+  font-size: var(--fs-label);
+  letter-spacing: var(--tracking-wider);
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.mtg-find__close {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  background: var(--ink-100);
+  border: 1px solid var(--rule-medium);
+  border-radius: 3px;
+  color: var(--bone-800);
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.12s ease, border-color 0.12s ease;
+}
+.mtg-find__close:hover { color: var(--bone-900); border-color: var(--accent-rail); }
+.mtg-find__body {
+  overflow-y: auto;
+  padding: var(--space-md);
+}
+.mtg-find__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--space-xs);
+}
+
+/* The zoom for a printing image rides above the overlay. */
+#mtg-find-lightbox { z-index: var(--z-lightbox); }
+
+/* --- Narrow screens: keep the search usable next to the wordmark --- */
+@media (max-width: 560px) {
+  .mtg-search { flex-basis: 200px; }
+  .mtg-search__input { font-size: var(--fs-label); letter-spacing: var(--tracking-normal); }
+  .mtg-find__title { font-size: var(--fs-display, 1.75rem); }
+}
+@media (max-width: 380px) {
+  .mtg-search { flex-basis: 150px; }
+}

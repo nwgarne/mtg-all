@@ -16,6 +16,12 @@ decks.dirtyshoulders.com. Prices are shown to everyone (no login gate).
   to low, Rarity, Mana value) reorders cards within each type section. Card tiles show image,
   set/collector/rarity, and
   USD + foil price; click to zoom.
+- **Card search** (`scripts/search.js`, in the topbar on every page): type a card name for Scryfall
+  autocomplete, then pick one to open an overlay listing **every printing** (every set the card
+  appeared in) with set name, year, collector number, rarity, and price, each zoomable (double-faced
+  cards show front and back). This is the site's one live dependency: it queries the Scryfall API
+  (allowed by `connect-src https://api.scryfall.com` in the Caddy CSP), rather than the prebuilt
+  per-year data, so new printings appear without a rebuild.
 - **Accordion behavior:** opening a category auto-collapses the others (one open at a time), and
   it **renders on expand** - a year can hold ~13,000 cards, so tiles are only mounted for the one
   open category (and cleared when it closes). The DOM never holds more than a single category's
@@ -51,7 +57,7 @@ mechanism rather than a hosted workflow. A self-hosted runner could call the sam
 ## Serving (caddy01)
 
 `caddy.snippet` is the Caddy site block (static file server, strict CSP that allows
-`cards.scryfall.io` images, no auth). It is added to
+`cards.scryfall.io` images and `api.scryfall.com` for the card-search requests, no auth). It is added to
 `/etc/caddy/Caddyfile.d/dirtyshoulders.caddy`. Pre-create the log file before reloading, or Caddy
 fails to start:
 

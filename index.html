@@ -23,8 +23,10 @@
   <!-- Site-specific: shared chrome, then the homepage grid. -->
   <link rel="stylesheet" href="/styles/mtg-all.css" />
   <link rel="stylesheet" href="/styles/home.css" />
+  <link rel="stylesheet" href="/styles/search.css" />
 
   <script src="/scripts/home.js" defer></script>
+  <script src="/scripts/search.js" defer></script>
 </head>
 <body data-bracket="3">
   <a class="skip-link" href="#main">Skip to content</a>
@@ -36,6 +38,12 @@
         <span class="mtg-wordmark__dot" aria-hidden="true">·</span>
         <span class="mtg-wordmark__sub">by year</span>
       </a>
+      <form class="mtg-search" role="search" autocomplete="off" novalidate>
+        <input class="mtg-search__input" type="search" name="q"
+               placeholder="Search a card..." aria-label="Search for a Magic card by name"
+               aria-autocomplete="list" aria-expanded="false" autocomplete="off"
+               autocapitalize="none" autocorrect="off" spellcheck="false" />
+      </form>
     </div>
   </header>
 
