@@ -11,7 +11,10 @@ decks.dirtyshoulders.com. Prices are shown to everyone (no login gate).
   backed by that year's highest-value card art (its "title card"), linking to `/<year>/`.
 - **Year page** (`year-template.html` + `scripts/year.js`): the year's cards grouped by type
   (Legendary Creatures, Creatures, Planeswalkers, Artifacts, Enchantments, Instants, Sorceries,
-  Lands, Other) into a single-open accordion. Card tiles show image, set/collector/rarity, and
+  Lands, Other) into a single-open accordion. A **Set** selector scopes the year to All cards or any one set
+  released that year (the "set deck inside the year"), and a **Sort** selector (Name, Price high
+  to low, Rarity, Mana value) reorders cards within each type section. Card tiles show image,
+  set/collector/rarity, and
   USD + foil price; click to zoom.
 - **Accordion behavior:** opening a category auto-collapses the others (one open at a time), and
   it **renders on expand** - a year can hold ~13,000 cards, so tiles are only mounted for the one
@@ -34,6 +37,16 @@ this site: neither has per-printing data with both images and prices.
 ```
 
 Environment overrides: `BULK=/path/to/default-cards.json`, `DEPLOY_HOST`, `DEPLOY_PATH`.
+
+## Auto-update
+
+A weekly cron on admin01 (the control VM, which has SSH access to the private caddy01) reruns
+`deploy.sh`, so new sets and refreshed prices appear without manual work:
+
+    0 6 * * 0 /home/nwgarne/projects/mtg-all/deploy.sh >> /home/nwgarne/projects/mtg-all/deploy.log 2>&1
+
+GitHub-hosted Actions runners cannot reach caddy01 (it is on a private network), so a cron is the
+mechanism rather than a hosted workflow. A self-hosted runner could call the same `deploy.sh`.
 
 ## Serving (caddy01)
 

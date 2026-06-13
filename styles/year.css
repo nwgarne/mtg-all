@@ -25,7 +25,109 @@
      from card-tile.css unchanged.
      ============================================================ */
   #year-grid {
+    margin-top: var(--space-md);
+  }
+
+
+  /* ============================================================
+     CONTROL BAR - Set scope + Sort selectors
+     ------------------------------------------------------------
+     Rendered by year.js between the hero/stat-row and the category
+     accordion. A slim bar of two labelled <select>s. On mobile the
+     two fields stack (flex-wrap + 100% basis). Tokens match the mono
+     kicker treatment of .deck-controls so the page reads as one set.
+     ============================================================ */
+  .year-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: var(--space-sm);
     margin-top: var(--space-xl);
+    padding: var(--space-sm) var(--space-md);
+    background: var(--ink-100);
+    border: 1px solid var(--rule-medium);
+    border-radius: var(--r-md);
+  }
+
+  .year-controls__field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3xs, 0.25rem);
+    flex: 1 1 16rem;
+    min-width: 0;
+  }
+
+  .year-controls__label {
+    font-family: var(--font-mono);
+    font-size: var(--fs-label);
+    letter-spacing: var(--tracking-widest);
+    text-transform: uppercase;
+    color: var(--bone-700);
+  }
+
+  /* The select itself. Custom chevron via a background SVG so it sits
+     on the dark surface without the native OS arrow well. */
+  .year-controls__select {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    width: 100%;
+    padding: var(--space-2xs) var(--space-sm);
+    padding-right: calc(var(--space-sm) + 1.25rem);
+    background-color: var(--ink-050);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='none' stroke='%23bda36a' stroke-width='1.5' d='M1 1l4 4 4-4'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right var(--space-sm) center;
+    border: 1px solid var(--rule-medium);
+    border-radius: var(--r-sm);
+    color: var(--bone-900);
+    font-family: var(--font-body, inherit);
+    font-size: var(--fs-meta);
+    line-height: 1.4;
+    cursor: pointer;
+    transition:
+      border-color var(--dur-fast) var(--ease-out-quart),
+      background-color var(--dur-fast) var(--ease-out-quart);
+  }
+  .year-controls__select:hover {
+    border-color: var(--rule-strong);
+    background-color: var(--ink-150);
+  }
+  .year-controls__select:focus-visible {
+    outline: 2px solid var(--accent-soft);
+    outline-offset: 1px;
+    border-color: var(--accent);
+  }
+  /* The popped-open option list is OS-drawn; force readable dark text
+     so it is legible on browsers that inherit the dark control color. */
+  .year-controls__select option {
+    color: #1a1a1a;
+    background: #f5f2ea;
+  }
+
+  /* Inline note when a chosen set has zero cards in every category. */
+  .year-controls__empty {
+    margin: 0;
+    padding: var(--space-md);
+    background: var(--ink-050);
+    border: 1px dashed var(--rule-medium);
+    border-radius: var(--r-md);
+    font-family: var(--font-mono);
+    font-size: var(--fs-label);
+    letter-spacing: var(--tracking-wide);
+    text-transform: uppercase;
+    color: var(--bone-700);
+    text-align: center;
+  }
+
+  @media (max-width: 640px) {
+    .year-controls {
+      gap: var(--space-xs);
+      padding: var(--space-xs) var(--space-sm);
+    }
+    .year-controls__field {
+      flex-basis: 100%;
+    }
   }
 
   /* One open category can hold thousands of tiles. Keep the open

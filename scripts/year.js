@@ -13,6 +13,16 @@
  * tiles of at most ONE category at a time. Opening a category clears
  * any other open category's body; closing a category clears its own.
  * Every card image is loading="lazy" so only on-screen images fetch.
+ *
+ * CONTROLS (rendered from JS, under the hero, above the accordion):
+ *   - Set scope: "All cards" or one set code; filters every category
+ *     to card.s === code, dropping categories that empty out.
+ *   - Sort: reorders cards WITHIN each type section (Name / Price /
+ *     Rarity / Mana value) without ever reordering the sections.
+ * Changing either re-derives the categories (filter on the FULL
+ * arrays, then sort) and re-renders the accordion. Render-on-expand
+ * is preserved: only the open category's tiles ever touch the DOM.
+ * All wiring is addEventListener (CSP: script-src 'self', no inline).
  */
 (function () {
   'use strict';
@@ -49,6 +59,15 @@
     var v = parseFloat(raw);
     if (!isFinite(v)) return null;
     return '$' + v.toFixed(2);
+  }
+
+  // Max market price of a card across nonfoil + foil; 0 when neither.
+  function cardMaxPrice(c) {
+    var p = parseFloat(c.p);
+    var pf = parseFloat(c.pf);
+    var a = isFinite(p) ? p : 0;
+    var b = isFinite(pf) ? pf : 0;
+    return a > b ? a : b;
   }
 
   // --- Year from the URL path ---
@@ -115,7 +134,7 @@
   }
 
   // --- Card tile (mirrors decklist.js buildCardRow + .card-tile CSS) ---
-  // c = { n, s, cn, t, m, r, p, pf, img, big, u }
+  // c = { n, s, cn, t, m, c, r, p, pf, img, big, u }  (c here = mana value)
   function buildCardTile(c) {
     var name = c.n || '';
     var row = el('div', 'card-tile');
@@ -187,14 +206,101 @@
     return row;
   }
 
+  // ============================================================
+  //  FILTER + SORT
+  //  These run over the FULL category card arrays (the source of
+  //  truth held in `baseCats`). They produce the derived category
+  //  arrays the accordion is built from. Tiles are still only
+  //  rendered on expand, so this touches plain objects, not DOM.
+  // ============================================================
+
+  // Rarity rank, descending priority: mythic > rare > uncommon > common > other.
+  var RARITY_RANK = { mythic: 4, rare: 3, uncommon: 2, common: 1 };
+  function rarityRank(r) {
+    if (!r) return 0;
+    var v = RARITY_RANK[String(r).toLowerCase()];
+    return v || 0;
+  }
+
+  // Case-insensitive name compare, used directly and as every tie-break.
+  function byName(a, b) {
+    var an = (a.n || '').toLowerCase();
+    var bn = (b.n || '').toLowerCase();
+    if (an < bn) return -1;
+    if (an > bn) return 1;
+    return 0;
+  }
+
+  // Comparator factory keyed by the sort <select> value.
+  function comparatorFor(sortKey) {
+    if (sortKey === 'price') {
+      // Max price high -> low; no-price (0) sinks to the bottom; tie-break name.
+      return function (a, b) {
+        var pa = cardMaxPrice(a);
+        var pb = cardMaxPrice(b);
+        if (pa !== pb) return pb - pa;
+        return byName(a, b);
+      };
+    }
+    if (sortKey === 'rarity') {
+      // Rarity high -> low; tie-break name.
+      return function (a, b) {
+        var ra = rarityRank(a.r);
+        var rb = rarityRank(b.r);
+        if (ra !== rb) return rb - ra;
+        return byName(a, b);
+      };
+    }
+    if (sortKey === 'cmc') {
+      // Mana value low -> high; cards without a numeric value sink; tie-break name.
+      return function (a, b) {
+        var ca = (typeof a.c === 'number' && isFinite(a.c)) ? a.c : Infinity;
+        var cb = (typeof b.c === 'number' && isFinite(b.c)) ? b.c : Infinity;
+        if (ca !== cb) return ca - cb;
+        return byName(a, b);
+      };
+    }
+    // Default: Name A-Z.
+    return byName;
+  }
+
+  // Build the derived categories for the current scope + sort.
+  //   scope === '' -> all cards; otherwise keep only card.s === scope.
+  //   Empty categories are dropped. Each kept category gets a sorted
+  //   COPY of its cards (the base arrays are never mutated) and a count
+  //   reflecting the filtered length.
+  function deriveCategories(baseCats, scope, sortKey) {
+    var cmp = comparatorFor(sortKey);
+    var out = [];
+    for (var i = 0; i < baseCats.length; i++) {
+      var cat = baseCats[i];
+      var src = cat.cards || [];
+      var cards;
+      if (scope) {
+        cards = [];
+        for (var j = 0; j < src.length; j++) {
+          if (src[j].s === scope) cards.push(src[j]);
+        }
+        if (!cards.length) continue; // drop categories that empty out
+      } else {
+        cards = src.slice(); // copy so the sort never reorders the base array
+      }
+      cards.sort(cmp);
+      out.push({ name: cat.name, cards: cards, count: cards.length });
+    }
+    return out;
+  }
+
   // --- Accordion: render-on-expand, single-open ---
-  // Tracks the currently open category index so opening one closes the other.
-  var openIndex = -1;
-  // Parallel arrays for the rendered category blocks.
+  // State for the current derived render. Parallel arrays for the
+  // rendered category blocks; openName tracks which category (by name,
+  // so it survives a re-derive) is open across scope/sort changes.
+  var openName = null;
   var catHeads = [];
   var catWraps = [];
   var catBodies = [];
   var catCards = [];
+  var catNames = [];
 
   function renderTilesInto(body, cards) {
     var frag = document.createDocumentFragment();
@@ -219,17 +325,27 @@
     catHeads[idx].setAttribute('aria-expanded', 'true');
   }
 
+  // Find the index of the currently open category, or -1.
+  function openIndex() {
+    if (openName == null) return -1;
+    for (var i = 0; i < catNames.length; i++) {
+      if (catNames[i] === openName) return i;
+    }
+    return -1;
+  }
+
   function toggle(idx) {
-    if (openIndex === idx) {
+    var cur = openIndex();
+    if (cur === idx) {
       // Toggle the open one shut.
       collapse(idx);
-      openIndex = -1;
+      openName = null;
       return;
     }
     // Auto-collapse whatever is open, then open the requested one.
-    if (openIndex !== -1) collapse(openIndex);
+    if (cur !== -1) collapse(cur);
     expand(idx);
-    openIndex = idx;
+    openName = catNames[idx];
   }
 
   function buildCatBlock(category, idx) {
@@ -254,7 +370,106 @@
     catWraps[idx] = wrap;
     catBodies[idx] = body;
     catCards[idx] = category.cards || [];
+    catNames[idx] = category.name;
     return wrap;
+  }
+
+  // (Re)build the accordion grid from a derived-categories array into
+  // `gridEl`. Preserves the render-on-expand + one-open invariant: if
+  // the previously-open category still exists it is reopened (and only
+  // its tiles are rendered); otherwise everything stays collapsed.
+  function renderAccordion(gridEl, derivedCats) {
+    // Reset the parallel-array bookkeeping for the fresh block set.
+    catHeads = [];
+    catWraps = [];
+    catBodies = [];
+    catCards = [];
+    catNames = [];
+
+    gridEl.innerHTML = '';
+    if (!derivedCats.length) {
+      // Every category filtered out under this scope: friendly inline note.
+      openName = null;
+      var note = el('p', 'year-controls__empty',
+        'No cards in this set for the current view.');
+      gridEl.appendChild(note);
+      return;
+    }
+
+    for (var k = 0; k < derivedCats.length; k++) {
+      gridEl.appendChild(buildCatBlock(derivedCats[k], k));
+    }
+
+    // Re-open the same category by name if it survived the re-derive.
+    var reopen = openIndex();
+    if (reopen !== -1) {
+      expand(reopen); // renders only this one category's tiles
+    } else {
+      openName = null;
+    }
+  }
+
+  // --- Controls (Set scope + Sort) ---
+  // Rendered between the hero and the accordion. Both are <select>s
+  // wired with addEventListener; changing either re-derives + repaints.
+  var SORT_OPTIONS = [
+    { value: 'name', label: 'Name (A-Z)' },
+    { value: 'price', label: 'Price (high to low)' },
+    { value: 'rarity', label: 'Rarity' },
+    { value: 'cmc', label: 'Mana value (low to high)' }
+  ];
+
+  function buildControls(state, onChange) {
+    var bar = el('div', 'year-controls');
+    bar.setAttribute('role', 'group');
+    bar.setAttribute('aria-label', 'View controls');
+
+    // -- SET scope --
+    var setField = el('label', 'year-controls__field');
+    setField.appendChild(el('span', 'year-controls__label', 'Set'));
+    var setSel = el('select', 'year-controls__select');
+    setSel.setAttribute('aria-label', 'Filter by set');
+
+    var allOpt = el('option', null, 'All cards (' + fmtInt(state.totalCards) + ')');
+    allOpt.value = '';
+    setSel.appendChild(allOpt);
+    for (var i = 0; i < state.sets.length; i++) {
+      var s = state.sets[i];
+      var code = s.code || '';
+      // "Name (CODE) - count"  (hyphen, never an em dash)
+      var optLabel = (s.name || code) + ' (' + String(code).toUpperCase() + ') - ' + fmtInt(s.count);
+      var opt = el('option', null, optLabel);
+      opt.value = code;
+      setSel.appendChild(opt);
+    }
+    setSel.value = state.scope;
+    setSel.addEventListener('change', function () {
+      state.scope = setSel.value;
+      onChange();
+    });
+    setField.appendChild(setSel);
+    bar.appendChild(setField);
+
+    // -- SORT --
+    var sortField = el('label', 'year-controls__field');
+    sortField.appendChild(el('span', 'year-controls__label', 'Sort'));
+    var sortSel = el('select', 'year-controls__select');
+    sortSel.setAttribute('aria-label', 'Sort cards within each type');
+    for (var k = 0; k < SORT_OPTIONS.length; k++) {
+      var so = SORT_OPTIONS[k];
+      var sopt = el('option', null, so.label);
+      sopt.value = so.value;
+      sortSel.appendChild(sopt);
+    }
+    sortSel.value = state.sort;
+    sortSel.addEventListener('change', function () {
+      state.sort = sortSel.value;
+      onChange();
+    });
+    sortField.appendChild(sortSel);
+    bar.appendChild(sortField);
+
+    return bar;
   }
 
   // --- Hero ---
@@ -344,15 +559,32 @@
     }
     var totalCards = (data.totalCards != null) ? data.totalCards : summedCount;
 
+    // Source of truth: the full, unsorted category arrays + the sets list.
+    var baseCats = categories;
+    var sets = (data && Array.isArray(data.sets)) ? data.sets : [];
+
+    // Live view state; defaults = all cards, name A-Z.
+    var state = { scope: '', sort: 'name', totalCards: totalCards, sets: sets };
+    openName = null;
+
     host.innerHTML = '';
-    host.appendChild(buildHero(year, totalCards, categories.length, totalValue));
+    // Hero shows the year-wide totals regardless of the active scope.
+    host.appendChild(buildHero(year, totalCards, baseCats.length, totalValue));
 
     var grid = el('div', 'deck-grid');
     grid.id = 'year-grid';
-    for (var k = 0; k < categories.length; k++) {
-      grid.appendChild(buildCatBlock(categories[k], k));
+
+    // re-derive + repaint the accordion for the current state.
+    function apply() {
+      var derived = deriveCategories(baseCats, state.scope, state.sort);
+      renderAccordion(grid, derived);
     }
+
+    host.appendChild(buildControls(state, apply));
     host.appendChild(grid);
+
+    // First paint: all cards, name A-Z, everything collapsed.
+    apply();
   }
 
   // --- Boot ---
