@@ -375,25 +375,38 @@
   // scroll-margin-top on the header (= the combined sticky offset) does
   // the spacing; this fires after the expand paints.
   function scrollToCat(idx) {
-    if (idx < 0 || idx >= catHeads.length) return;
-    var head = catHeads[idx];
-    if (!head) return;
-    // Collapsing the previous (possibly multi-screen) section and expanding this
-    // one is a large reflow, and the browser's scroll anchoring shifts the
-    // viewport as content above changes. Measuring/scrolling synchronously lands
-    // on stale geometry, so the new section's top is missed. Defer to the next
-    // frame (layout settled), then scroll to the header's ABSOLUTE document
-    // position minus the live sticky stack so its top always parks at the top.
+    if (idx < 0 || idx >= catWraps.length) return;
+    // Measure the .deck-cat WRAP, not the header. The header is position:sticky,
+    // so once you have scrolled past it getBoundingClientRect() returns its PINNED
+    // offset (the sticky top), not its natural document position - scrolling there
+    // is a no-op and leaves the section's cards a full screen above the viewport.
+    // The wrap is static, so its rect IS the natural position. Collapsing the
+    // previous (multi-screen) section shrinks the document and clamps scroll to the
+    // bottom, so compute the absolute target live and force an INSTANT scroll
+    // (global CSS sets scroll-behavior:smooth, which would animate across the whole
+    // document height and lose the target).
+    var wrap = catWraps[idx];
+    if (!wrap) return;
     var doScroll = function () {
       var off = stickyOffsetPx();
-      var top = head.getBoundingClientRect().top +
+      var top = wrap.getBoundingClientRect().top +
                 (window.pageYOffset || document.documentElement.scrollTop || 0);
-      try { window.scrollTo(0, Math.max(0, Math.round(top - off - 4))); } catch (e) {}
+      var y = Math.max(0, Math.round(top - off - 4));
+      // Force an INSTANT jump. Global CSS sets scroll-behavior:smooth, and a
+      // scrollTo behavior of 'auto' (and the legacy 2-arg form) RESOLVE to that
+      // smooth - animating across the whole document height and never arriving
+      // inside one interaction. Pin scroll-behavior:auto on <html> for the jump
+      // (explicit 'smooth' callers like back-to-top are unaffected), then restore.
+      var rs = document.documentElement.style;
+      var prev = rs.scrollBehavior;
+      rs.scrollBehavior = 'auto';
+      try { window.scrollTo({ top: y, left: 0, behavior: 'instant' }); }
+      catch (e) { window.scrollTo(0, y); }
+      rs.scrollBehavior = prev;
     };
+    doScroll();                          // immediate: scroll before the clamped-bottom frame paints
     if (typeof requestAnimationFrame === 'function') {
-      requestAnimationFrame(function () { requestAnimationFrame(doScroll); });
-    } else {
-      doScroll();
+      requestAnimationFrame(doScroll);   // re-assert after the reflow / scroll-anchoring settles
     }
   }
 
