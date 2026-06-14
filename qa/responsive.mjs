@@ -1,8 +1,10 @@
 // Responsive layout + core-interaction pass across phone / desktop / wide.
 //
-// Asserts: no horizontal overflow on any view; the windowed grid resolves the
-// expected column count; the DOM stays bounded (virtualization is on, not a full
-// mount); a jump-pill scroll-to-section parks the opened header under the sticky
+// Asserts: no horizontal overflow on any view (homepage + year pages); the topbar
+// search input stays >=16px on phones so iOS Safari does not focus-zoom on tap; the
+// windowed grid resolves the expected column count; the DOM stays bounded
+// (virtualization is on, not a full mount); a jump-pill scroll-to-section parks the
+// opened header under the sticky
 // toolbar; and the topbar search opens its printings overlay multi-up. Screenshots
 // land in SHOTS for eyeballing.
 //
@@ -15,6 +17,24 @@ const ACCORDION_BODY = '.deck-cat .deck-cat__body';
 for (const profile of ['phone', 'desktop', 'wide']) {
   const { browser, page, errors } = await open(profile);
   try {
+    // --- Homepage (/) : layout + the iOS no-zoom input guard ---
+    await goto(page, '/', 1200);
+    const ofHome = await horizOverflow(page);
+    check(`[${profile}] homepage: no horizontal overflow`, !ofHome.overflowing, JSON.stringify(ofHome));
+    // iOS Safari auto-zooms into a focused sub-16px input and never zooms back out, which
+    // left the homepage magnified + shifted toward the topbar search ("mobile off-centered,
+    // have to pinch out"). The field must stay >=16px on touch; guards the 2026-06-14 fix.
+    const inputFontPx = await page.evaluate(() => {
+      const i = document.querySelector('.mtg-search__input');
+      return i ? parseFloat(getComputedStyle(i).fontSize) : null;
+    });
+    if (profile === 'phone') {
+      check(`[${profile}] homepage: topbar search >=16px (no iOS focus-zoom)`, inputFontPx !== null && inputFontPx >= 16, `${inputFontPx}px`);
+    } else {
+      check(`[${profile}] homepage: topbar search present`, inputFontPx !== null, `${inputFontPx}px`);
+    }
+    await page.screenshot({ path: join(SHOTS, `responsive-${profile}-home.png`) });
+
     // --- Year picker (the default /<year>/ view) ---
     await goto(page, '/2024/', 1200);
     let of = await horizOverflow(page);
