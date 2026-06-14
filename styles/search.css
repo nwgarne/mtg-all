@@ -248,13 +248,14 @@ html.mtg-find-lock { overflow: hidden; }
   z-index: calc(var(--z-overlay) + 6);
   max-width: min(360px, 80vw);
 }
-/* WCAG 2.5.5: on touch (coarse pointer) the in-overlay "search another card" field was
-   the lone sub-44px control in the header (the close + clear are already 44px). Grow it
-   to a 44px touch target with matching vertical padding; desktop keeps the compact
-   editorial height from the base .mtg-search__input rule. Right padding still reserves
-   the clear-glyph lane. */
+/* WCAG 2.5.5: on touch (coarse pointer) grow EVERY .mtg-search field to a 44px target
+   with matching vertical padding - the topbar search and the in-overlay "search another
+   card" both (the close + clear glyphs are already 44px). Desktop (fine pointer) keeps
+   the compact editorial height from the base .mtg-search__input rule. The base rule's
+   left/right padding survives (only the vertical padding is overridden) so the right
+   clear-glyph lane is preserved. */
 @media (pointer: coarse) {
-  .mtg-find__search .mtg-search__input {
+  .mtg-search__input {
     min-height: 44px;
     padding-top: 0.75rem;
     padding-bottom: 0.75rem;
