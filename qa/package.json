@@ -1,0 +1,17 @@
+{
+  "name": "mtg-all-qa",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Headless Playwright QA harness for mtg-all.dirtyshoulders.com",
+  "scripts": {
+    "responsive": "node responsive.mjs",
+    "windowing": "node windowing.mjs",
+    "touch": "node touch-targets.mjs",
+    "probe": "node probe.mjs",
+    "all": "node responsive.mjs && node windowing.mjs && node touch-targets.mjs"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.59.0"
+  }
+}

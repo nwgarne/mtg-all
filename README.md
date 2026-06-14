@@ -69,6 +69,17 @@ sudo systemctl reload caddy
 `mtg-all.dirtyshoulders.com` resolves via the existing `*.dirtyshoulders.com` wildcard; TLS issues
 automatically through caddy01's global Cloudflare DNS-01.
 
+## QA
+
+`qa/` is a headless Playwright harness that checks the site against the live origin: responsive
+layout, the viewport windowing (virtualization), and touch targets. See `qa/README.md` for setup
+and the known-good invocation.
+
+```sh
+cd qa && npm install        # or set CHROMIUM_PATH + PW_CORE_PATH (see qa/README.md)
+node responsive.mjs && node windowing.mjs && node touch-targets.mjs
+```
+
 ## Credits
 
 Card data and images from [Scryfall](https://scryfall.com). Visual system (`styles/tokens.css`,
