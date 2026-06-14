@@ -489,7 +489,7 @@
     var cw = body.clientWidth ||
       (body.parentNode && body.parentNode.clientWidth) || 0;
     if (cw <= 0) return null;
-    var gap = GRID_GAP_FB, padX = GRID_PAD_FB, padTop = GRID_PAD_FB;
+    var gap = GRID_GAP_FB, padX = GRID_PAD_FB, padTop = GRID_PAD_FB, gtc = '';
     if (typeof getComputedStyle === 'function') {
       try {
         var cs = getComputedStyle(body);
@@ -499,6 +499,7 @@
         if (isFinite(pl)) padX = pl;
         var pt = parseFloat(cs.paddingTop);
         if (isFinite(pt)) padTop = pt;
+        gtc = cs.gridTemplateColumns || '';
       } catch (e) {}
     }
     // body.clientWidth already excludes its own padding, so the track area is
@@ -506,9 +507,30 @@
     // padding box width minus scrollbar, i.e. it INCLUDES padding. Subtract it.
     var inner = cw - padX * 2;
     if (inner <= 0) return null;
-    var cols = Math.floor((inner + gap) / (GRID_COL_MIN + gap));
-    if (cols < 1) cols = 1;
-    var colW = (inner - gap * (cols - 1)) / cols;
+    // COLUMN COUNT comes from the grid the browser ACTUALLY laid out, not an
+    // analytic guess: getComputedStyle resolves grid-template-columns to the
+    // used per-track pixel widths (e.g. "166.5px 166.5px"), so the track count
+    // IS the real column count and the first track IS the real column width.
+    // This keeps the windowing in lockstep with the CSS at every breakpoint --
+    // the responsive phone grid is repeat(2, 1fr) (card-tile.css), which the
+    // 220px-minmax math below would misread as 1 column on a ~390px screen,
+    // doubling rowH and over-reserving the spacers ~2x (the window then rides
+    // above the viewport: blank rows on scroll, a black screen on a big jump).
+    // Fall back to the analytic minmax only when no track list is available
+    // (collapsed body / no getComputedStyle).
+    var cols, colW;
+    var tracks = (gtc && gtc !== 'none')
+      ? gtc.trim().split(/\s+/).filter(function (t) { return t.charAt(0) !== '['; })
+      : null;
+    if (tracks && tracks.length) {
+      cols = tracks.length;
+      colW = parseFloat(tracks[0]);
+      if (!isFinite(colW) || colW <= 0) colW = (inner - gap * (cols - 1)) / cols;
+    } else {
+      cols = Math.floor((inner + gap) / (GRID_COL_MIN + gap));
+      if (cols < 1) cols = 1;
+      colW = (inner - gap * (cols - 1)) / cols;
+    }
     var rowH = (colW * 680 / 488) + TILE_META;   // image (exact aspect) + footer
     return { cw: cw, gap: gap, padX: padX, padTop: padTop,
              cols: cols, colW: colW, rowH: rowH };
