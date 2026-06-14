@@ -252,6 +252,7 @@
     }
 
     var nameCell = el('div', 'card-tile__name', name);
+    if (name) nameCell.setAttribute('title', name);   // hover tooltip for the now 1-line-ellipsized name
     meta.appendChild(nameCell);
 
     // Sub line: SET · #cn · Rarity (mirrors the decks meta line).
@@ -463,35 +464,71 @@
     }
   }
 
+  // ----- Shared grid layout math (CLS reservation + viewport windowing) -----
+  // The card-tile footer is pinned to a FIXED height in card-tile.css so every
+  // tile is the same total height: image (exact 488x680 aspect) + footer + the
+  // tile's gap/padding/border. TILE_META is that fixed add-on (footer + the
+  // tile's own gap(8)+pad(8+12)+border(2) = ~30, plus the offset between the
+  // body-column width and the narrower image width inside the tile's padding,
+  // ~25, nets ~65). It is the ONE meta constant both the height reservation and
+  // the windowing measure rows by. The window also MEASURES a real mounted tile
+  // and snaps rowH to it, so this analytic value only has to be close enough to
+  // guard the first frame's CLS before any tile mounts.
+  var TILE_META = 65;
+  var GRID_COL_MIN = 220;   // minmax(220px, 1fr)
+  var GRID_GAP_FB = 12;     // --space-xs fallback when computed style is absent
+  var GRID_PAD_FB = 12;     // --space-xs fallback (body padding)
+
+  // Read the live grid metrics off a body: its content width, the real grid
+  // gap + padding (so the math is correct at the mobile breakpoint too, where
+  // gap/pad shrink), the column count, the per-column width, and the analytic
+  // row height (image + TILE_META). Returns null when the body has no width yet
+  // (can't lay out; callers skip with no harm).
+  function gridMetrics(body) {
+    if (!body) return null;
+    var cw = body.clientWidth ||
+      (body.parentNode && body.parentNode.clientWidth) || 0;
+    if (cw <= 0) return null;
+    var gap = GRID_GAP_FB, padX = GRID_PAD_FB, padTop = GRID_PAD_FB;
+    if (typeof getComputedStyle === 'function') {
+      try {
+        var cs = getComputedStyle(body);
+        var g = parseFloat(cs.rowGap || cs.gap);
+        if (isFinite(g)) gap = g;
+        var pl = parseFloat(cs.paddingLeft);
+        if (isFinite(pl)) padX = pl;
+        var pt = parseFloat(cs.paddingTop);
+        if (isFinite(pt)) padTop = pt;
+      } catch (e) {}
+    }
+    // body.clientWidth already excludes its own padding, so the track area is
+    // clientWidth minus the two horizontal paddings... clientWidth is the
+    // padding box width minus scrollbar, i.e. it INCLUDES padding. Subtract it.
+    var inner = cw - padX * 2;
+    if (inner <= 0) return null;
+    var cols = Math.floor((inner + gap) / (GRID_COL_MIN + gap));
+    if (cols < 1) cols = 1;
+    var colW = (inner - gap * (cols - 1)) / cols;
+    var rowH = (colW * 680 / 488) + TILE_META;   // image (exact aspect) + footer
+    return { cw: cw, gap: gap, padX: padX, padTop: padTop,
+             cols: cols, colW: colW, rowH: rowH };
+  }
+
   // CLS GUARD (Item 9): reserve a tile grid's FINAL height before its tiles
   // mount, so the body occupies its full size from its first painted frame and
   // the chunked appends fill into already-reserved space instead of growing the
   // body chunk-by-chunk (which would re-shift every collapsed sibling header
-  // below it on each frame). The estimate is derived, not hardcoded: columns
-  // from the body's content width + the grid step, row height from the card
-  // image's exact 488x680 aspect plus a small meta-row allowance. An imperfect
-  // estimate only matters during the brief load; it is cleared when the real
-  // content has landed (or the render is superseded), so final layout is exact.
+  // below it on each frame). Derived from the shared grid metrics; an imperfect
+  // estimate only matters during the brief load and is cleared when the real
+  // content lands (or the render is superseded), so final layout is exact.
+  // (Used by the SMALL-category / flat-fallback chunked path; the windowed path
+  // reserves height via its spacers instead.)
   function reserveBodyHeight(body, total) {
     if (!body || total <= 0) return;
-    var GAP = 12;        // --space-xs (grid gap)
-    var PAD = 12;        // --space-xs (body padding, both sides)
-    var COL_MIN = 220;   // minmax(220px, 1fr)
-    // name + sub/price row + the tile's own gap/padding. Biased slightly high
-    // so we over-reserve rather than under-reserve: an over-estimate only
-    // trims (below the fold) when the real tiles land, whereas an under-
-    // estimate would let the body grow mid-mount. Image height is exact.
-    var META = 60;
-    var cw = body.clientWidth ||
-      (body.parentNode && body.parentNode.clientWidth) || 0;
-    if (cw <= 0) return; // can't estimate without a width; skip (no harm)
-    var inner = cw - PAD * 2;
-    var cols = Math.floor((inner + GAP) / (COL_MIN + GAP));
-    if (cols < 1) cols = 1;
-    var colW = (inner - GAP * (cols - 1)) / cols;
-    var tileH = (colW * 680 / 488) + META;   // image (exact aspect) + meta
-    var rows = Math.ceil(total / cols);
-    var estH = PAD * 2 + rows * tileH + GAP * (rows - 1);
+    var m = gridMetrics(body);
+    if (!m) return;
+    var rows = Math.ceil(total / m.cols);
+    var estH = m.padTop * 2 + rows * m.rowH + m.gap * (rows - 1);
     if (isFinite(estH) && estH > 0) {
       body.style.minHeight = Math.round(estH) + 'px';
       _reservedBody = body;
@@ -557,11 +594,261 @@
     step();                              // first chunk paints in this frame
   }
 
+  // ============================================================
+  //  VIEWPORT WINDOWING (virtualization)
+  //  ------------------------------------------------------------
+  //  A large category (or the flat grid) mounts ONLY the on-screen
+  //  rows of tiles (+ an overscan), never the whole list, so the DOM
+  //  holds a small bounded set even for a 13k-card scope and the mount
+  //  is instant. The page itself is the scroll container (the bodies
+  //  stay in normal flow); a TOP and a BOTTOM spacer reserve the
+  //  off-window scroll height so the page scrollbar is correct and
+  //  every section header keeps its stable document position.
+  //
+  //  Row model (matches card-tile.css's fixed-height tiles + the grid
+  //  gap). With STEP = rowH + gap, row r's top offset inside the grid
+  //  content is r*STEP. Windowing rows [first..last] inclusive:
+  //    topSpacer    = first*STEP - gap        (omitted when first == 0)
+  //    bottomSpacer = (totalRows-1-last)*STEP - gap  (omitted at the end)
+  //  so [topSpacer][gap][window rows][gap][bottomSpacer] sums EXACTLY to
+  //  the full list's content height (verified algebraically), which is
+  //  why the scrollbar + header offsets are correct and CLS is ~0.
+  //
+  //  Only ONE controller is ever active (the open category OR the flat
+  //  grid); setup tears the previous one down so its window scroll +
+  //  resize listeners never leak.
+  // ============================================================
+  var VIRTUAL_THRESHOLD = 120; // mount-all under this; window at/above it
+  var VIRTUAL_OVERSCAN = 8;    // rows rendered beyond the viewport, each side
+  var _activeVC = null;        // the single live virtual controller, or null
+
+  // Tear down the active controller: drop its window scroll + resize listeners
+  // (do NOT leak them) and forget it. The body's children are left as-is; the
+  // caller (collapse / re-render) clears or replaces the body.
+  function teardownVirtual() {
+    var vc = _activeVC;
+    _activeVC = null;
+    if (!vc) return;
+    vc.destroyed = true;
+    if (vc.onScroll) {
+      try { window.removeEventListener('scroll', vc.onScroll); } catch (e) {}
+    }
+    if (vc.onResize) {
+      try { window.removeEventListener('resize', vc.onResize); } catch (e) {}
+    }
+    if (vc.rafId && typeof cancelAnimationFrame === 'function') {
+      try { cancelAnimationFrame(vc.rafId); } catch (e) {}
+    }
+    vc.rafId = 0;
+    // Drop the pinned full-height so a reused/cleared body does not keep a stale
+    // min-height (the caller clears the body's children separately).
+    if (vc.body) { try { vc.body.style.minHeight = ''; } catch (e) {} }
+  }
+
+  function makeSpacer(h) {
+    var s = el('div', 'deck-cat__spacer');
+    s.setAttribute('aria-hidden', 'true');
+    s.style.height = Math.max(0, Math.round(h)) + 'px';
+    return s;
+  }
+
+  // (Re)derive cols/colW/rowH for the controller from the live body width.
+  // Returns true when the column count or row height changed (a relayout that
+  // needs a forced window rebuild). rowH starts analytic and is later snapped
+  // to a measured tile (vcMeasure).
+  function vcComputeLayout(vc) {
+    var m = gridMetrics(vc.body);
+    if (!m) return false;
+    var changed = (m.cols !== vc.cols) ||
+      (Math.abs(m.rowH - vc.rowHBase) > 0.5) ||
+      (Math.abs(m.gap - vc.gap) > 0.5) ||
+      (Math.abs(m.padTop - vc.padTop) > 0.5);
+    vc.cols = m.cols;
+    vc.colW = m.colW;
+    vc.gap = m.gap;
+    vc.padTop = m.padTop;
+    vc.rowHBase = m.rowH;               // analytic row height (pre-measurement)
+    // Keep a measured rowH if we have one and the width is unchanged; otherwise
+    // fall back to the analytic value until the next measure.
+    if (!vc.measured || changed) vc.rowH = m.rowH;
+    vc.totalRows = Math.ceil(vc.cards.length / vc.cols);
+    return changed;
+  }
+
+  // Compute the visible row range for the current scroll position, with the
+  // overscan applied and clamped to [0, totalRows-1].
+  function vcVisibleRange(vc) {
+    var rect = vc.body.getBoundingClientRect();
+    var scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+    var vh = window.innerHeight || document.documentElement.clientHeight || 0;
+    var step = vc.rowH + vc.gap;
+    // Document-relative top of the grid CONTENT (body border-box top + its
+    // top padding).
+    var contentTop = rect.top + scrollY + vc.padTop;
+    var firstVisible = Math.floor((scrollY - contentTop) / step);
+    var lastVisible = Math.floor((scrollY + vh - contentTop) / step);
+    var first = firstVisible - VIRTUAL_OVERSCAN;
+    var last = lastVisible + VIRTUAL_OVERSCAN;
+    if (first < 0) first = 0;
+    if (last > vc.totalRows - 1) last = vc.totalRows - 1;
+    if (last < 0) last = 0;
+    if (first > last) first = last;
+    return { first: first, last: last };
+  }
+
+  // Build [topSpacer?, window tiles, bottomSpacer?] for rows [first..last] and
+  // swap them into the body in one shot. force=true rebuilds even if the row
+  // range is unchanged (used after a relayout / measurement).
+  function vcRenderWindow(vc, range, force) {
+    if (vc.destroyed) return;
+    if (!force && range.first === vc.firstRow && range.last === vc.lastRow &&
+        vc.rendered) {
+      return;
+    }
+    vc.firstRow = range.first;
+    vc.lastRow = range.last;
+    vc.rendered = true;
+
+    var cols = vc.cols;
+    var n = vc.cards.length;
+    var step = vc.rowH + vc.gap;
+    var startCard = range.first * cols;
+    var endCard = Math.min(n, (range.last + 1) * cols);
+
+    var nodes = [];
+    // TOP spacer: reserves rows [0..first). Omitted at the very top.
+    if (range.first > 0) {
+      nodes.push(makeSpacer(range.first * step - vc.gap));
+    }
+    for (var ci = startCard; ci < endCard; ci++) {
+      nodes.push(buildCardTile(vc.cards[ci]));
+    }
+    // BOTTOM spacer: reserves rows (last..totalRows-1]. Omitted at the end.
+    var bottomRows = vc.totalRows - 1 - range.last;
+    if (bottomRows > 0) {
+      nodes.push(makeSpacer(bottomRows * step - vc.gap));
+    }
+    // ATOMIC swap: replaceChildren removes the old window + mounts the new one
+    // in a SINGLE DOM mutation, so layout never observes an empty (zero-height)
+    // body mid-swap. Combined with the pinned min-height + overflow-anchor:none,
+    // this keeps the document height stable so scroll-to-bottom actually reaches
+    // the last row (no scroll-anchoring fight, no clamp short of the end).
+    if (typeof vc.body.replaceChildren === 'function') {
+      vc.body.replaceChildren.apply(vc.body, nodes);
+    } else {
+      vc.body.textContent = '';
+      for (var ni = 0; ni < nodes.length; ni++) vc.body.appendChild(nodes[ni]);
+    }
+    vc.windowStartCard = startCard;
+  }
+
+  // Pin the body to the full list's content height so it never collapses during
+  // a window swap (which would shrink the document and clamp the scroll short of
+  // the bottom). The spacers already reserve this height when present; the pin
+  // guarantees it even for the instant between renders and before the first one.
+  function vcPinHeight(vc) {
+    var full = vc.padTop * 2 + vc.totalRows * vc.rowH +
+      (vc.totalRows - 1) * vc.gap;
+    if (isFinite(full) && full > 0) {
+      vc.body.style.minHeight = Math.round(full) + 'px';
+    }
+  }
+
+  // Measure a real mounted tile and snap rowH to it (kills any drift between
+  // the analytic estimate and the true rendered height). Returns true when the
+  // measured height differed enough to warrant a re-render.
+  function vcMeasure(vc) {
+    if (vc.destroyed) return false;
+    var tile = vc.body.querySelector('.card-tile');
+    if (!tile) return false;
+    var h = tile.getBoundingClientRect().height;
+    if (!isFinite(h) || h <= 0) return false;
+    if (Math.abs(h - vc.rowH) > 0.5) {
+      vc.rowH = h;
+      vc.measured = true;
+      return true;
+    }
+    vc.measured = true;
+    return false;
+  }
+
+  // Recompute the window for the current scroll/size and render it if the row
+  // range changed (or forced). rAF-throttled via the scroll/resize handlers.
+  function vcUpdate(vc, force) {
+    if (vc.destroyed) return;
+    var range = vcVisibleRange(vc);
+    vcRenderWindow(vc, range, force);
+  }
+
+  // Stand up a windowed controller on `body` for `cards`. Mounts the first
+  // window synchronously (instant, no loading note), measures a real tile to
+  // lock rowH, then attaches rAF-throttled scroll + resize listeners. Enforces
+  // the single-active-controller invariant by tearing down any prior one.
+  function setupVirtual(body, cards) {
+    teardownVirtual();
+    cancelChunkedRender();               // no chunked render competes with us
+    releaseReservedHeight();             // spacers reserve height; drop minHeight
+
+    var vc = {
+      body: body, cards: cards,
+      cols: 0, colW: 0, gap: GRID_GAP_FB, padTop: GRID_PAD_FB,
+      rowH: 0, rowHBase: 0, totalRows: 0,
+      firstRow: -1, lastRow: -1, windowStartCard: 0,
+      rendered: false, measured: false, destroyed: false,
+      rafId: 0, rafPending: false,
+      onScroll: null, onResize: null
+    };
+    _activeVC = vc;
+
+    body.textContent = '';
+    vcComputeLayout(vc);
+    vcPinHeight(vc);                      // pin full height up front (CLS guard)
+    // First window (analytic rowH).
+    vcUpdate(vc, true);
+    // Snap to the real tile height, then re-pin + re-render if it moved.
+    if (vcMeasure(vc)) { vcPinHeight(vc); vcUpdate(vc, true); }
+
+    var schedule = function () {
+      if (vc.destroyed || vc.rafPending) return;
+      vc.rafPending = true;
+      if (typeof requestAnimationFrame === 'function') {
+        vc.rafId = requestAnimationFrame(function () {
+          vc.rafPending = false; vc.rafId = 0;
+          if (vc.destroyed) return;
+          vcUpdate(vc, false);
+        });
+      } else {
+        setTimeout(function () {
+          vc.rafPending = false;
+          if (vc.destroyed) return;
+          vcUpdate(vc, false);
+        }, 16);
+      }
+    };
+    vc.onScroll = schedule;
+    vc.onResize = function () {
+      if (vc.destroyed) return;
+      // A resize can change the column count / column width (and thus rowH);
+      // recompute the layout, re-pin the full height, re-snap to a measured
+      // tile, and force a rebuild.
+      vcComputeLayout(vc);
+      vcPinHeight(vc);
+      vcUpdate(vc, true);
+      if (vcMeasure(vc)) { vcPinHeight(vc); vcUpdate(vc, true); }
+    };
+    window.addEventListener('scroll', vc.onScroll, { passive: true });
+    window.addEventListener('resize', vc.onResize);
+    return vc;
+  }
+
   function collapse(idx) {
     if (idx < 0 || idx >= catWraps.length) return;
     // Stop any chunked render targeting this (or any) category before we clear,
     // so an in-flight frame can't repopulate the body we just emptied.
     cancelChunkedRender();
+    // Tear down the windowed controller if this body owns it: drop its scroll +
+    // resize listeners (never leak them) before the body is cleared.
+    if (_activeVC && _activeVC.body === catBodies[idx]) teardownVirtual();
     catWraps[idx].classList.add('is-collapsed');
     catHeads[idx].setAttribute('aria-expanded', 'false');
     // Clear the tiles so the DOM never holds more than the single open category.
@@ -571,11 +858,24 @@
   function expand(idx) {
     if (idx < 0 || idx >= catWraps.length) return;
     var body = catBodies[idx];
+    // Any prior windowed controller is for a different (now-closing) body; tear
+    // it down first so only ONE controller is ever active at a time.
+    teardownVirtual();
     body.innerHTML = '';
     catWraps[idx].classList.remove('is-collapsed');
     catHeads[idx].setAttribute('aria-expanded', 'true');
-    // A loading note for big categories; renderTilesChunked clears it when done
-    // and skips it entirely for small ones (synchronous render).
+    var cards = catCards[idx] || [];
+    // LARGE category: stand up the viewport-windowing controller. It mounts the
+    // on-screen window instantly (spacers reserve the rest of the height), so no
+    // loading note is needed and the DOM only ever holds window+overscan tiles.
+    if (cards.length > VIRTUAL_THRESHOLD) {
+      setupVirtual(body, cards);
+      syncActivePills();
+      return;
+    }
+    // SMALL category: render every tile normally (full a11y, simplest path).
+    // A loading note for the (rare) >chunk-but-<threshold mid case; renderTiles
+    // Chunked clears it when done and skips it for the synchronous small render.
     // Item 2: this note is NON-live and aria-hidden. Its text is rewritten on
     // every animation frame as a decrementing countdown, so a role=status /
     // aria-live region here floods AT with ~14 polite announcements per open,
@@ -583,7 +883,6 @@
     // _live / announceState region already owns. Sighted users keep the note.
     var note = el('p', 'deck-cat__loading');
     note.setAttribute('aria-hidden', 'true');
-    var cards = catCards[idx] || [];
     if (cards.length > TILE_CHUNK) {
       note.textContent = 'Loading ' + fmtInt(cards.length) + ' cards...';
       body.appendChild(note);
@@ -739,6 +1038,11 @@
     // Any prior chunked render is for the old block set; stop it before the
     // parallel arrays are reset so a late frame can't write into a dead body.
     cancelChunkedRender();
+    // Tear down any active windowed controller too: gridEl.innerHTML below
+    // detaches the old body it was driving, so its scroll/resize listeners must
+    // be removed first (no leaks, no writes into a detached node). The newly
+    // opened body re-virtualizes via expand().
+    teardownVirtual();
     // Reset the parallel-array bookkeeping for the fresh block set.
     catHeads = [];
     catWraps = [];
@@ -971,32 +1275,22 @@
   // they track the live scope AND any active rarity filter. No em dashes.
   function buildScopeReadout(ctx, state, derived) {
     // Live totals across the derived (already scope+rarity filtered) cats so
-    // the breadcrumb tracks the active rarity filter (Item 3). In FLAT mode the
-    // grid only paints the top FLAT_CAP by the current sort, so cap the count
-    // AND sum the value over just those shown cards - otherwise the breadcrumb
-    // would advertise e.g. "1,467 cards / $X" over a grid showing 200 tiles
-    // (Item 3, "and the Flat cap where relevant"). Type mode sums everything.
+    // the breadcrumb tracks the active rarity filter (Item 3). Flat mode is now
+    // UNCAPPED + virtualized (the whole sorted scope renders), so its count +
+    // value sum the FULL set, exactly like type mode - just flattened. The old
+    // "Top 200 of N" capping is gone; the breadcrumb advertises the true N.
     var count = 0, value = 0;
-    // Item 7: in flat mode, when the grid is a capped top-N slice, the count is
-    // explicitly honest ("Top 200 of N") rather than a bare "200 cards" that
-    // reads as the scope total. flatCapped + flatTotal drive that wording below.
-    var flatCapped = false, flatTotal = 0;
     if (state.group === 'flat') {
-      // Concat the scope+rarity-filtered cards, rank by the current sort, and
-      // take the same top slice renderFlat shows; total the count + value of it.
-      var all = [];
+      // Flat: total the count + value over EVERY scope+rarity-filtered card
+      // (the full set the virtualized grid renders), by the current sort order
+      // (order does not affect the totals). No slice.
       for (var fi = 0; fi < derived.length; fi++) {
         var fcards = derived[fi].cards || [];
-        for (var fj = 0; fj < fcards.length; fj++) all.push(fcards[fj]);
-      }
-      flatTotal = all.length;
-      all.sort(comparatorFor(state.sort));
-      var shown = all.length > FLAT_CAP ? all.slice(0, FLAT_CAP) : all;
-      flatCapped = flatTotal > FLAT_CAP;
-      count = shown.length;
-      for (var si = 0; si < shown.length; si++) {
-        var sv = parseFloat(shown[si].p);
-        if (isFinite(sv)) value += sv;
+        count += derived[fi].count != null ? derived[fi].count : fcards.length;
+        for (var fj = 0; fj < fcards.length; fj++) {
+          var fv = parseFloat(fcards[fj].p);
+          if (isFinite(fv)) value += fv;
+        }
       }
     } else {
       for (var i = 0; i < derived.length; i++) {
@@ -1036,17 +1330,13 @@
 
     var stats = el('div', 'year-scopebar__stats');
     var cntEl = el('span', 'year-scopebar__count');
-    if (flatCapped) {
-      // Item 7: "Top 200 of N · by <sort>" - honest that only the top slice
-      // shows, of how many, and by which ranking. No em dashes (middle dot).
-      cntEl.appendChild(document.createTextNode('Top '));
-      cntEl.appendChild(el('strong', null, fmtInt(FLAT_CAP)));
-      cntEl.appendChild(document.createTextNode(' of ' + fmtInt(flatTotal)));
+    cntEl.appendChild(el('strong', null, fmtInt(count)));
+    cntEl.appendChild(document.createTextNode(count === 1 ? ' card' : ' cards'));
+    if (state.group === 'flat') {
+      // Flat is uncapped now; append the ranking so "N cards · by price" reads
+      // as the full, sorted list (no cap to disclose). No em dashes (middle dot).
       cntEl.appendChild(el('span', 'year-scopebar__sep-dot', ' · '));
       cntEl.appendChild(document.createTextNode('by ' + sortPhrase(state.sort)));
-    } else {
-      cntEl.appendChild(el('strong', null, fmtInt(count)));
-      cntEl.appendChild(document.createTextNode(count === 1 ? ' card' : ' cards'));
     }
     stats.appendChild(cntEl);
     if (value > 0) {
@@ -1380,13 +1670,9 @@
     var noun = (count === 1 ? 'card' : 'cards');
     var msg;
     if (state.group === 'flat') {
-      if (count > FLAT_CAP) {
-        msg = 'Showing the top ' + fmtInt(FLAT_CAP) + ' of ' + fmtInt(count) +
-          ' ' + rarity + noun + ' by ' + sortPhrase(state.sort) + '.';
-      } else {
-        msg = 'Showing ' + fmtInt(count) + ' ' + rarity + noun +
-          ' by ' + sortPhrase(state.sort) + '.';
-      }
+      // Flat is uncapped + virtualized: announce the FULL N (no "top 200 of N").
+      msg = 'Showing all ' + fmtInt(count) + ' ' + rarity + noun +
+        ' by ' + sortPhrase(state.sort) + '.';
     } else {
       msg = 'Showing ' + fmtInt(count) + ' ' + rarity + noun +
         ', sorted by ' + sortPhrase(state.sort) + '.';
@@ -1395,21 +1681,25 @@
   }
 
   // ----- FLAT (price-ranked) render (Item 2) -----
-  // One chunked grid of the scope's cards (after the rarity filter), sorted by
-  // the current Sort, CAPPED at the top FLAT_CAP. The cap PRESERVES the
-  // render-on-expand DOM bound (the DOM never holds thousands of tiles). The
-  // accordion bookkeeping is torn down so the single-open invariant + pill
-  // sync stay coherent when toggling back to type mode.
+  // One grid of the scope's cards (after the rarity filter), sorted by the
+  // current Sort. UNCAPPED: the whole sorted scope is shown, virtualized, so
+  // the DOM still only ever holds the on-screen window (+ overscan) even for a
+  // 13k-card "All cards" flat list. (FLAT_CAP is retained only as a label
+  // threshold for the breadcrumb wording elsewhere; it no longer truncates the
+  // rendered or counted set.) The accordion bookkeeping is torn down so the
+  // single-open invariant + pill sync stay coherent when toggling back to type
+  // mode; the single windowed controller is enforced by setupVirtual.
   function renderFlat(gridEl, derivedCats, state) {
     // Any in-flight accordion render is for the old block set; stop it and
     // clear the parallel arrays so a late frame can't write into a dead body.
     cancelChunkedRender();
+    teardownVirtual();                   // drop any prior windowed controller
     catHeads = []; catWraps = []; catBodies = []; catCards = []; catNames = [];
     catPills = [];
     openName = null;
 
-    // Concat the already scope+rarity-filtered categories, then sort the whole
-    // set by the current comparator and take the top FLAT_CAP.
+    // Concat the already scope+rarity-filtered categories, then sort the WHOLE
+    // set by the current comparator. No slice: the full set is rendered.
     var all = [];
     for (var i = 0; i < derivedCats.length; i++) {
       var cards = derivedCats[i].cards || [];
@@ -1417,7 +1707,6 @@
     }
     var total = all.length;
     all.sort(comparatorFor(state.sort));
-    var shown = all.length > FLAT_CAP ? all.slice(0, FLAT_CAP) : all;
 
     gridEl.innerHTML = '';
     if (!total) {
@@ -1429,21 +1718,22 @@
 
     var wrap = el('div', 'year-flat');
     var note = el('p', 'year-flat__note');
-    if (total > FLAT_CAP) {
-      note.textContent = 'Showing the top ' + fmtInt(FLAT_CAP) + ' of ' +
-        fmtInt(total) + ' by ' + sortPhrase(state.sort) + '.';
-    } else {
-      note.textContent = 'Showing all ' + fmtInt(total) +
-        (total === 1 ? ' card' : ' cards') + ' by ' + sortPhrase(state.sort) + '.';
-    }
+    // Uncapped: the note reflects the FULL N, by the current sort.
+    note.textContent = 'Showing all ' + fmtInt(total) +
+      (total === 1 ? ' card' : ' cards') + ' by ' + sortPhrase(state.sort) + '.';
     wrap.appendChild(note);
 
     var body = el('div', 'deck-cat__body year-flat__grid');
     wrap.appendChild(body);
     gridEl.appendChild(wrap);
 
-    // Reuse the chunked mount (<=200 tiles, smooth, height reserved).
-    renderTilesChunked(body, shown);
+    // Virtualize when the list is large; for a tiny flat list render all tiles
+    // normally (full a11y, no controller). Same threshold as the accordion.
+    if (total > VIRTUAL_THRESHOLD) {
+      setupVirtual(body, all);
+    } else {
+      renderTilesChunked(body, all);
+    }
   }
 
   function renderScope(ctx, host, state) {
@@ -1537,6 +1827,7 @@
       hideBackToTop();
       unmountLiveRegion();   // clear any stale scope announcement (Item 4)
       cancelChunkedRender(); // drop any in-flight tile mount + its reservation
+      teardownVirtual();     // drop the windowed controller's scroll/resize hooks
       openName = null;
       host.innerHTML = '';
       host.appendChild(ctx.hero);

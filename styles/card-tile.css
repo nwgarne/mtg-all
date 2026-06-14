@@ -178,8 +178,36 @@
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
     gap: var(--space-xs);
     padding: var(--space-xs);
+    /* WINDOWING: the page is the scroll container and a windowed body swaps its
+       child tiles as you scroll. Browser scroll-anchoring would try to keep a
+       just-removed (off-window) tile in view and fight the swap, nudging the
+       scroll position short of the true bottom. Opt this subtree out so the
+       window's spacers are the sole authority on scroll height/position. Harmless
+       for the small-category (non-windowed) bodies. */
+    overflow-anchor: none;
   }
   .deck-cat.is-collapsed .deck-cat__body { display: none; }
+
+  /* VIEWPORT WINDOWING SPACER (year.js virtual grid).
+     A large category's body mounts only the on-screen rows of tiles (+ an
+     overscan); the off-window scroll height is held by a TOP and a BOTTOM
+     spacer so the page scrollbar + every section header position stay correct.
+     Each spacer is a single grid item spanning the full row so the windowed
+     tiles always begin on a fresh column-aligned row. JS sets its pixel height
+     inline (style.height). It must take part in grid sizing without creating an
+     extra column track and never paint, so: full-row span, zero min size, and
+     no box/padding of its own. The grid gap still applies between a spacer and
+     the adjacent tile row; the JS height math subtracts one gap accordingly. */
+  .deck-cat__spacer {
+    grid-column: 1 / -1;
+    min-width: 0;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    pointer-events: none;
+  }
 
 
   /* ============================================================
@@ -189,6 +217,17 @@
     position: relative;
     display: grid;
     grid-template-columns: 1fr auto;
+    /* UNIFORM TILE HEIGHT (windowing prerequisite): the footer row is a FIXED
+       --card-tile-footer height so every tile is exactly
+       image (aspect 488/680) + gap + footer + padding, regardless of whether a
+       tile carries a foil line or a long (clamped) name. The viewport-windowing
+       in year.js (the spacer-based virtual grid) measures rows off this exact
+       height, so a single META constant there matches every real tile. The old
+       content-visibility/contain-intrinsic-size pair is GONE: the window only
+       mounts on-screen rows (+ overscan), so there are no off-screen tiles for
+       the engine to skip, and contain-intrinsic-size would only fight the
+       window's own height math. */
+    grid-template-rows: auto var(--card-tile-footer);
     grid-template-areas:
       "image image"
       "meta  price";
@@ -197,18 +236,11 @@
     background: var(--ink-000);
     border: 1px solid var(--rule-medium);
     border-radius: var(--r-md);
-    /* PERF: the big categories mount thousands of tiles. content-visibility
-       lets the engine skip layout + paint for any tile scrolled off-screen.
-       contain-intrinsic-size is the placeholder it reserves for a skipped
-       tile, so it MUST match the real rendered height or scrolling janks /
-       fights the year page's own body-height reservation. That reservation
-       (year.js) sizes a tile as image + ~60px meta at the 220px column
-       minimum: 220 x 680/488 ~= 306px image + ~66px of meta/price/padding ~=
-       372px tall. We reserve that exact box (width 220px = the column min,
-       so wider 1fr columns just scale the height the engine measures once
-       on-screen). Close to the real height = no CLS, no scroll jank. */
-    content-visibility: auto;
-    contain-intrinsic-size: 220px 372px;
+    /* Footer row height. Tall enough for the price column's worst case:
+       TCG label + price numerals + a foil line (always reserved). The JS
+       windowing META (year.js) = top pad (8) + image->footer gap (8) +
+       this footer + bottom pad (12). Keep the two in lockstep if changed. */
+    --card-tile-footer: 60px;
     transition:
       background var(--dur-fast) var(--ease-out-quart),
       border-color var(--dur-fast) var(--ease-out-quart),
@@ -271,6 +303,12 @@
     flex-direction: column;
     gap: var(--space-3xs);
     min-width: 0;
+    /* The footer row is a FIXED height (uniform tiles); keep the meta column
+       inside it (start-aligned, never stretching the row) so a tile's height
+       does not depend on its name/sub content. */
+    min-height: 0;
+    align-self: start;
+    overflow: hidden;
   }
   .card-tile__name {
     font-family: var(--font-headline);
@@ -344,6 +382,12 @@
     letter-spacing: var(--tracking-tight);
     color: var(--accent-bright);
     font-variant-numeric: tabular-nums;
+    /* Stay inside the fixed footer row (uniform tiles): start-aligned and
+       clipped so the foil tail / no-price chip never grows the tile. The
+       footer height already reserves the foil line's space whether or not a
+       tile has one, so a foil tile and a plain tile are exactly equal height. */
+    min-height: 0;
+    overflow: hidden;
   }
   .card-tile__price .lbl {
     display: block;
@@ -631,7 +675,12 @@
     }
     .card-tile__name {
       font-size: 0.8125rem;
-      white-space: normal;
+      /* Keep ONE line + ellipsis even on phones (it used to wrap here). Uniform
+         tile height is required for the viewport-windowing math in year.js; a
+         wrapping name would make a 2-line tile taller than its row and break the
+         spacer-based virtual grid. The base rule's nowrap/ellipsis still apply;
+         this override just re-asserts nowrap against the old white-space:normal. */
+      white-space: nowrap;
     }
     .card-tile__note { display: none; }
     .card-tile__price { font-size: 1.125rem; }

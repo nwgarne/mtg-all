@@ -249,6 +249,7 @@
     }
     // Headline = the set name (the answer to "which sets"); sub = year, code, number, rarity.
     var nameCell = el('div', 'card-tile__name', c.setName || (c.s ? c.s.toUpperCase() : '-'));
+    nameCell.setAttribute('title', c.setName || (c.s ? c.s.toUpperCase() : ''));   // hover tooltip for the 1-line-ellipsized set name
     meta.appendChild(nameCell);
     var sub = el('div', 'card-tile__sub');
     var parts = [];
