@@ -279,6 +279,87 @@
     text-align: center;
   }
 
+  /* ============================================================
+     COLD-LOAD CLS RESERVATION (Item 6)
+     ------------------------------------------------------------
+     A cold load of /<year>/ shifted ~0.22 (mobile, zero interaction).
+     Two distinct, measured causes - both reserved here:
+
+     (A) #year-root holds only the short loading note at cold paint, so
+         when the JSON resolves the hero + stat-row + picker grid mount
+         and shove everything down. Reserve ~one viewport up front so the
+         first paint already owns the landing area and the swap fills into
+         reserved space instead of growing it.
+         Scoped with :has(> .year-grid__loading) so it is LIVE ONLY during
+         loading: year.js replaces #year-root's contents on render, after
+         which this stops matching and the real view (picker / scope
+         accordion / empty-404) defines its own exact height - no dead
+         space under short states. The picker + scope views are always far
+         taller than one viewport, so the reservation is fully covered (no
+         reverse-shift). svh (stable vs mobile UI-chrome) then vh then a px
+         floor for engines without viewport units in min-height.
+
+     (B) The dominant shift was a FONT-SWAP reflow, not the mount: the hero
+         tagline is set in Fraunces (loaded with display=swap). The fallback
+         face wraps to FEWER lines, so when Fraunces lands the tagline gains
+         a line and pushes the stat-row + the whole grid down ~27px. Reserve
+         the tagline's FINAL wrapped height per width (measured: 3 lines
+         <=428px, 2 lines 429-899px, 1 line 900-1279px, 2 lines >=1280px at
+         the larger type) so the fallback paint already occupies the final
+         height and nothing reflows when the web font swaps in. The fallback
+         never wraps to MORE lines than Fraunces here, so these floors add no
+         dead space. year.css loads only on year pages, so the homepage hero
+         is untouched. No em dashes.
+     ============================================================ */
+  #year-root:has(> .year-grid__loading) {
+    display: block;
+    min-height: 600px;            /* fallback floor */
+    min-height: 86vh;             /* viewport-relative */
+    min-height: 86svh;            /* stable small-viewport unit */
+  }
+  /* The placeholder sits at the TOP of the reserved box (not centered), so
+     the hero that replaces it paints at the same y and nothing jumps. */
+  #year-root:has(> .year-grid__loading) .year-grid__loading {
+    margin-top: 0;
+  }
+  /* (B) Tagline font-swap reflow guard. Reserve the GREATER of the fallback
+     wrap and the Fraunces wrap per width band, so the box neither GROWS (web
+     font adds a line) nor SHRINKS (fallback wrapped to more lines than the web
+     font) when the swap lands - either direction is a layout shift. Measured:
+       <=428px : fallback 3 / Fraunces 3 -> 81px
+       429-1279: fallback 2 / Fraunces 1-2 -> 54px (the 1-line Fraunces case at
+                 >=900px keeps the 2-line floor so it cannot shrink; the result
+                 is one line of slack there, not a shift)
+       >=1280  : fallback 2 / Fraunces 2 -> 58px (larger type, 28.8px line)
+     Reserving to the 2-line floor is also resilient to other platforms' serif
+     fallbacks, which wrap this short tagline to at most 2 lines at >=429px. */
+  .hero.is-readout .hero__tagline {
+    min-height: 54px;             /* 2 lines @ 27px line-height */
+  }
+  @media (max-width: 428px) {
+    .hero.is-readout .hero__tagline { min-height: 81px; }   /* 3 lines */
+  }
+  @media (min-width: 1280px) {
+    .hero.is-readout .hero__tagline { min-height: 66px; }   /* the serif fallback wraps taller here (measured 65px); reserve the greater so it cannot shrink on swap */
+  }
+
+  /* (C) Title font-swap reflow guard. The year H1 is a single line of Antonio sized
+     ~clamp(2.75rem, 7vw, 6.5rem) at line-height ~1; the system fallback renders a touch
+     shorter, so when Antonio swaps in the title GROWS and shoves the stat-row + grid down
+     (the ~0.22 desktop cold-load shift). Reserve the loaded height with the same clamp so
+     the box never grows on swap. Measured loaded title height tracks this exactly: 43/54/
+     72/88/100px at 390/768/1024/1280/1440. */
+  .hero.is-readout .hero__title {
+    min-height: clamp(2.75rem, 7vw, 6.5rem);
+  }
+
+  /* (D) Stat-row font-swap guard. The mono stat figures grow a few px when IBM Plex Mono
+     swaps in (+4px at desktop), nudging the grid. Reserve a floor that covers the loaded
+     3-up row; on narrow widths the stacked row is taller, so this floor is inert there. */
+  .hero.is-readout .stat-row {
+    min-height: 88px;
+  }
+
 
   /* ============================================================
      EMPTY / 404 STATE
@@ -499,7 +580,14 @@
     border-color: var(--accent);
     background: var(--ink-150);
     color: var(--accent);
-    outline: none;
+  }
+  /* Item 1 (WCAG 2.4.7 - REGRESSION): the shared hover/focus rule only shifted
+     the border from --accent-rail to --accent, a ~1:1 imperceptible change now
+     that the resting border IS --accent-rail, and it killed the outline. Give
+     keyboard focus a dedicated visible ring (mirrors .year-scopebar__year). */
+  .year-toolbar__back:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
   }
   .year-toolbar__back-arrow {
     color: var(--accent);
@@ -865,11 +953,24 @@
       overflow-x: auto;
       -webkit-overflow-scrolling: touch;
       scrollbar-width: thin;
+      /* Item 9: make the NEXT chip PEEK at rest so the row reads as scrollable.
+         The trailing pad MATCHES the fade width (1.5rem) so the last chip can
+         scroll fully clear of the fade at the end (the old 24px pad under a 28px
+         fade left it permanently dimmed); non-forcing proximity snap + a
+         scroll-padding-right of the peek width parks rest positions so a partial
+         next chip stays visible UNDER the fade instead of aligning flush to the
+         edge. Not a disclosure - the fade is preserved. Kept at 24px (not wider)
+         so the rarity row's phone footprint stays close to its tuned width. */
       padding-right: var(--space-md);
-      scroll-padding-right: var(--space-md);
-      -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
-      mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+      scroll-padding-right: 1.5rem;
+      scroll-snap-type: x proximity;
+      -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 1.5rem), transparent);
+      mask-image: linear-gradient(to right, #000 calc(100% - 1.5rem), transparent);
     }
+    /* Snap each chip's leading edge; combined with scroll-padding-right this
+       leaves the following chip half-shown under the fade at every rest stop. */
+    .year-toolbar__rarity .year-rarity,
+    .year-toolbar__pills .year-pill { scroll-snap-align: start; }
     .year-pill,
     .year-rarity { flex: 0 0 auto; }
     /* Keep the back + label + Group + Sort row on ONE line on tablets (641-900px)

@@ -401,8 +401,11 @@
       for (var i = 0; i < recs.length; i++) { if (recs[i].s) sets[recs[i].s] = 1; }
       var nSets = Object.keys(sets).length;
       var nPr = recs.length;
-      var label = 'Printed in ' + nSets + ' set' + (nSets === 1 ? '' : 's');
-      if (nPr !== nSets) label += ' · ' + nPr + ' printings';
+      // Always show BOTH counts so the pattern is uniform ("Printed in N sets · M
+      // printings"), even when N == M; otherwise the "· N printings" clause only
+      // surfacing sometimes reads like a missing field.
+      var label = 'Printed in ' + nSets + ' set' + (nSets === 1 ? '' : 's') +
+        ' · ' + nPr + ' printing' + (nPr === 1 ? '' : 's');
       _count.textContent = label;
       // Announce the loaded result to SR users (always spell out both counts).
       announce(name + ': printed in ' + nSets + ' set' + (nSets === 1 ? '' : 's') +
@@ -590,7 +593,17 @@
         else if (names.length) choose(names[0]);
         else if (input.value.trim().length >= 2) choose(input.value.trim());
       } else if (ev.key === 'Escape') {
-        if (menu.classList.contains('is-open')) { ev.preventDefault(); hideMenu(); }
+        if (menu.classList.contains('is-open')) {
+          ev.preventDefault();
+          // Stop the open menu's Escape from bubbling to the document-level Escape
+          // handler (which would call closeResults). In the in-overlay search this would
+          // otherwise dismiss the menu AND the whole overlay on one keystroke; here the
+          // first Escape only closes the popup, and a second Escape (menu now closed,
+          // so this branch is skipped) is free to bubble up and close the overlay. The
+          // topbar field has no overlay to guard, so swallowing this Escape is harmless.
+          ev.stopPropagation();
+          hideMenu();
+        }
       }
     });
     input.addEventListener('blur', function () { setTimeout(hideMenu, 120); });

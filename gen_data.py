@@ -88,12 +88,14 @@ with open(BULK) as f:
         si["count"] += 1
         if art:
             if val > si["topval"]:
-                # Keep a distinct-art runner-up so sets that share a top card (e.g. the
-                # 1993 reprints all topping out at Black Lotus) can show different art.
-                if si["art"] and si["art"] != art:
+                # Keep a different-CARD runner-up so sets that share a top card (e.g. the
+                # 1993 reprints all topping out at Black Lotus) can show a different card.
+                # Keyed by NAME: the same card reprinted across sets has a different art URL
+                # but the SAME illustration, so deduping on art would not separate them.
+                if si["top"] and si["top"] != rec["n"]:
                     si["topval2"], si["art2"], si["top2"] = si["topval"], si["art"], si["top"]
                 si["topval"] = val; si["art"] = art; si["top"] = rec["n"]
-            elif art != si["art"] and val > si["topval2"]:
+            elif rec["n"] != si["top"] and val > si["topval2"]:
                 si["topval2"], si["art2"], si["top2"] = val, art, rec["n"]
         year_value[year] += fval(usd)  # nonfoil sum as the year's "market" figure
         # title card = highest single-card value, prefer one with art
@@ -114,17 +116,18 @@ for year in sorted(by_year):
             continue
         cards.sort(key=lambda r: (r["n"].lower(), r["s"], r["cn"]))
         cat_blocks.append({"name": name, "count": len(cards), "cards": cards})
-    # Build the set cards, deduping art: if a set's top-card art is already shown by an
-    # earlier (larger) set this year, fall back to its distinct-art runner-up so adjacent
-    # set cards stay visually distinct.
+    # Build the set cards, deduping by TOP CARD NAME: if a set's top card is already shown
+    # by an earlier (larger) set this year, fall back to its next distinct card so adjacent
+    # set cards stay visually distinct (the same card reprinted has a different art URL but
+    # the same illustration, so dedup on name, not art).
     sets_list = []
-    used_art = set()
+    used_top = set()
     for k, v in sorted(year_setinfo[year].items(), key=lambda kv: (-kv[1]["count"], kv[1]["name"])):
         art_c, top_c, val_c = v["art"], v["top"], v["topval"]
-        if art_c and art_c in used_art and v["art2"]:
+        if top_c and top_c in used_top and v["top2"]:
             art_c, top_c, val_c = v["art2"], v["top2"], v["topval2"]
-        if art_c:
-            used_art.add(art_c)
+        if top_c:
+            used_top.add(top_c)
         sets_list.append({"code": k, "name": v["name"], "count": v["count"], "art": art_c,
                           "top": top_c, "value": round(max(val_c, 0.0), 2)})
     with open(f"{OUT}/{year}.json", "w") as fo:

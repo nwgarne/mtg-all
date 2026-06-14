@@ -576,9 +576,13 @@
     catHeads[idx].setAttribute('aria-expanded', 'true');
     // A loading note for big categories; renderTilesChunked clears it when done
     // and skips it entirely for small ones (synchronous render).
+    // Item 2: this note is NON-live and aria-hidden. Its text is rewritten on
+    // every animation frame as a decrementing countdown, so a role=status /
+    // aria-live region here floods AT with ~14 polite announcements per open,
+    // burying the real "Jumped to <type>, N cards." summary that the singleton
+    // _live / announceState region already owns. Sighted users keep the note.
     var note = el('p', 'deck-cat__loading');
-    note.setAttribute('role', 'status');
-    note.setAttribute('aria-live', 'polite');
+    note.setAttribute('aria-hidden', 'true');
     var cards = catCards[idx] || [];
     if (cards.length > TILE_CHUNK) {
       note.textContent = 'Loading ' + fmtInt(cards.length) + ' cards...';
@@ -697,7 +701,12 @@
     head.appendChild(el('span', 'deck-cat__title', '// ' + category.name));
     var count = (category.count != null) ? category.count : (category.cards ? category.cards.length : 0);
     head.appendChild(el('span', 'deck-cat__count', fmtInt(count) + (count === 1 ? ' card' : ' cards')));
-    head.appendChild(el('span', 'deck-cat__chev', '▾'));
+    // Item 5 (WCAG 4.1.2): the chevron is decorative; aria-hidden drops the
+    // glyph from the head's accessible name (which otherwise read
+    // "... N CARDS ▾"). aria-expanded on the head already conveys open/closed.
+    var chev = el('span', 'deck-cat__chev', '▾');
+    chev.setAttribute('aria-hidden', 'true');
+    head.appendChild(chev);
     head.addEventListener('click', function () { toggle(idx, true); });
     // Wrap the disclosure button in a heading so the accordion exposes a
     // document outline / is reachable by heading navigation (Item 9). The
@@ -968,6 +977,10 @@
     // would advertise e.g. "1,467 cards / $X" over a grid showing 200 tiles
     // (Item 3, "and the Flat cap where relevant"). Type mode sums everything.
     var count = 0, value = 0;
+    // Item 7: in flat mode, when the grid is a capped top-N slice, the count is
+    // explicitly honest ("Top 200 of N") rather than a bare "200 cards" that
+    // reads as the scope total. flatCapped + flatTotal drive that wording below.
+    var flatCapped = false, flatTotal = 0;
     if (state.group === 'flat') {
       // Concat the scope+rarity-filtered cards, rank by the current sort, and
       // take the same top slice renderFlat shows; total the count + value of it.
@@ -976,8 +989,10 @@
         var fcards = derived[fi].cards || [];
         for (var fj = 0; fj < fcards.length; fj++) all.push(fcards[fj]);
       }
+      flatTotal = all.length;
       all.sort(comparatorFor(state.sort));
       var shown = all.length > FLAT_CAP ? all.slice(0, FLAT_CAP) : all;
+      flatCapped = flatTotal > FLAT_CAP;
       count = shown.length;
       for (var si = 0; si < shown.length; si++) {
         var sv = parseFloat(shown[si].p);
@@ -1021,8 +1036,18 @@
 
     var stats = el('div', 'year-scopebar__stats');
     var cntEl = el('span', 'year-scopebar__count');
-    cntEl.appendChild(el('strong', null, fmtInt(count)));
-    cntEl.appendChild(document.createTextNode(count === 1 ? ' card' : ' cards'));
+    if (flatCapped) {
+      // Item 7: "Top 200 of N · by <sort>" - honest that only the top slice
+      // shows, of how many, and by which ranking. No em dashes (middle dot).
+      cntEl.appendChild(document.createTextNode('Top '));
+      cntEl.appendChild(el('strong', null, fmtInt(FLAT_CAP)));
+      cntEl.appendChild(document.createTextNode(' of ' + fmtInt(flatTotal)));
+      cntEl.appendChild(el('span', 'year-scopebar__sep-dot', ' · '));
+      cntEl.appendChild(document.createTextNode('by ' + sortPhrase(state.sort)));
+    } else {
+      cntEl.appendChild(el('strong', null, fmtInt(count)));
+      cntEl.appendChild(document.createTextNode(count === 1 ? ' card' : ' cards'));
+    }
     stats.appendChild(cntEl);
     if (value > 0) {
       stats.appendChild(el('span', 'year-scopebar__sep-dot', '·'));
@@ -1261,8 +1286,11 @@
         var chip = el('button', 'year-rarity year-rarity--' + opt.value);
         chip.setAttribute('type', 'button');
         chip.textContent = opt.label;
-        chip.setAttribute('aria-label', 'Show ' +
-          (opt.value === 'all' ? 'all rarities' : opt.label + ' cards'));
+        // Item 3 (WCAG 2.5.3 Label in Name): no aria-label, so the accessible
+        // name IS the visible word ("Rare", "Mythic", "All"). The previous
+        // "Show Rare cards" started with "Show", so voice-control users saying
+        // "click Rare" could miss it. The group toggle buttons already use their
+        // visible label as the name (no aria-label), so they need no change.
         if (curRarity === opt.value) {
           chip.classList.add('is-active');
           chip.setAttribute('aria-pressed', 'true');
@@ -1288,6 +1316,10 @@
     catPills = [];
     if (!isFlat && derived.length) {
       var pills = el('div', 'year-toolbar__pills');
+      // Item 4 (WCAG 1.3.1): a bare <div> is role=generic, where aria-label is
+      // not guaranteed to be exposed; role=group makes the label reliable
+      // (matches the rarity row, which already sets role=group).
+      pills.setAttribute('role', 'group');
       pills.setAttribute('aria-label', 'Jump to type');
       for (var i = 0; i < derived.length; i++) {
         (function (idx, cat) {
