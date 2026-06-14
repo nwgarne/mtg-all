@@ -256,6 +256,14 @@ html.mtg-find-lock { overflow: hidden; }
    clear-glyph lane is preserved. */
 @media (pointer: coarse) {
   .mtg-search__input {
+    /* >=16px so iOS Safari does not auto-zoom into the field on focus (and never
+       zoom back out), which left the page magnified and shifted toward the topbar
+       - the "mobile is off-centered, have to pinch out" report. The box width is
+       set by .mtg-search flex-basis, not font-size, so this does not widen the
+       field; min-height below keeps the taller text vertically centered. This is
+       the single source of truth for the field's touch font-size - the
+       narrow-screen block below must NOT re-shrink it. */
+    font-size: 16px;
     min-height: 44px;
     padding-top: 0.75rem;
     padding-bottom: 0.75rem;
@@ -317,7 +325,10 @@ html.mtg-find-lock { overflow: hidden; }
 @media (max-width: 560px) {
   .mtg-search { flex-basis: 210px; }
   .mtg-search__input {
-    font-size: var(--fs-label);
+    /* No font-size here on purpose: on touch the field is pinned to 16px by the
+       (pointer: coarse) rule above so iOS Safari does not auto-zoom on focus.
+       Re-adding a sub-16px size here would reintroduce that bug. This block only
+       handles the compact narrow-screen spacing. */
     letter-spacing: var(--tracking-normal);
     /* A touch more left room so the text/placeholder is not pinched against the edge
        once the field narrows (right padding still reserves the clear-glyph lane). */
