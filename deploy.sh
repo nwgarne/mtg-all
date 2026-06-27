@@ -6,12 +6,12 @@
 # Env overrides:
 #   BULK=/path/to/default-cards.json   (else the latest is downloaded from Scryfall)
 #   DEPLOY_HOST=caddy01                 (ssh host)
-#   DEPLOY_PATH=/srv/www/dirtyshoulders-mtg-all
+#   DEPLOY_PATH=/srv/www/foiltilt-mtg-all
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 BUILD="$ROOT/build"
 DEPLOY_HOST="${DEPLOY_HOST:-caddy01}"
-DEPLOY_PATH="${DEPLOY_PATH:-/srv/www/dirtyshoulders-mtg-all}"
+DEPLOY_PATH="${DEPLOY_PATH:-/srv/www/foiltilt-mtg-all}"
 BULK="${BULK:-$ROOT/default-cards.json}"
 
 # 1. Scryfall bulk default_cards (printing-level, with images + prices)
@@ -24,7 +24,7 @@ fi
 
 # 2. assemble build/ from source (no data yet)
 rm -rf "$BUILD"; mkdir -p "$BUILD/scripts" "$BUILD/styles"
-cp "$ROOT/index.html" "$ROOT/404.html" "$ROOT/favicon.ico" "$ROOT/favicon-16.png" "$ROOT/favicon-32.png" "$ROOT/apple-touch-icon.png" "$ROOT/og-image.jpg" "$BUILD/"
+cp "$ROOT/index.html" "$ROOT/404.html" "$ROOT/favicon.ico" "$ROOT/favicon-16.png" "$ROOT/favicon-32.png" "$ROOT/apple-touch-icon.png" "$ROOT/og-image.jpg" "$ROOT/ft-mark.png" "$ROOT/foiltilt-wordmark.png" "$BUILD/"
 cp "$ROOT/scripts/"*.js "$BUILD/scripts/"
 cp "$ROOT/styles/"*.css "$BUILD/styles/"
 

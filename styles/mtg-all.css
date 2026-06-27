@@ -102,3 +102,17 @@
     .mtg-topbar__inner { padding: 0 var(--space-sm); }
   }
 }
+
+  /* FoilTilt brand mark in the wordmark + wordmark lockup in the hero */
+  .mtg-wordmark__ft {
+    width: 1.5rem; height: 1.5rem; flex: none; align-self: center;
+    filter: drop-shadow(0 0 6px color-mix(in oklch, var(--accent) 40%, transparent));
+    transition: transform var(--dur-fast) var(--ease-out-quart);
+  }
+  .mtg-wordmark:hover .mtg-wordmark__ft,
+  .mtg-wordmark:focus-visible .mtg-wordmark__ft { transform: scale(1.08) rotate(-3deg); }
+  .hero__foiltilt {
+    display: block; width: clamp(220px, 36vw, 420px); height: auto;
+    margin: 0 auto var(--space-md); position: relative; z-index: 2;
+    filter: drop-shadow(0 6px 18px oklch(0% 0 0 / 0.5));
+  }
