@@ -1,0 +1,438 @@
+/* ============================================================
+   mtg-all.dirtyshoulders.com - SIGNATURE LAYER
+   ------------------------------------------------------------
+   The MTG-native identity + showpiece moments layered on top of
+   the inherited decks system. Loaded LAST so its overrides win.
+
+     1. Mana pips + the WUBRG spine        (brand spine)
+     2. Hero stat-row                       (confident figures)
+     3. Hero card-wall                      (art-led hero)
+     4. The Ridgeline                       (history-of-Magic data-viz)
+     5. Era-banded year grid                (spotlight + eras + end-cap)
+     6. Foil-tilt                           (holo card interaction)
+
+   CSP: script-src 'self' (all behaviour in home.js/year.js/search.js,
+   no inline handlers); style-src allows inline custom props, which is
+   how per-era tints (--era) and foil tilt (--rx/--ry/--mx/--my) arrive.
+   ============================================================ */
+
+@layer components {
+
+  /* ============================================================
+     1. MANA PIPS + WUBRG SPINE
+     ============================================================ */
+  .mtg-pips {
+    display: inline-flex;
+    gap: 0.4em;
+    align-items: center;
+    vertical-align: -0.04em;
+  }
+  .mtg-pips .pip {
+    width: 0.52em;
+    height: 0.52em;
+    border-radius: 50%;
+    background: currentColor;
+    box-shadow: 0 0 0.5em -0.12em currentColor;
+  }
+  .pip--w { color: var(--mtg-w); }
+  .pip--u { color: var(--mtg-u); }
+  .pip--b { color: var(--mtg-b); }
+  .pip--r { color: var(--mtg-r); }
+  .pip--g { color: var(--mtg-g); }
+
+  /* The five-band spine. A thin hard-edged WUBRG bar under the hero. */
+  .mtg-spine {
+    height: 3px;
+    width: min(100%, 30rem);
+    margin-top: var(--space-lg);
+    border-radius: var(--r-pill);
+    background: var(--mtg-pie-bar);
+    box-shadow: 0 0 18px -3px color-mix(in oklch, var(--mtg-u) 45%, transparent);
+  }
+
+  /* ============================================================
+     2. HERO STAT-ROW - the figures, said with confidence
+     ============================================================ */
+  .hero-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: clamp(1.25rem, 5vw, 3rem);
+    margin-top: var(--space-lg);
+  }
+  .hero-stat { display: flex; flex-direction: column; gap: 0.35rem; }
+  .hero-stat__num {
+    font-family: var(--font-display);
+    font-weight: var(--fw-display-bold);
+    font-size: clamp(1.9rem, 3.6vw, 2.9rem);
+    line-height: 0.9;
+    letter-spacing: var(--tracking-tight);
+    color: var(--bone-900);
+    font-variant-numeric: tabular-nums;
+  }
+  .hero-stat__num .u { color: var(--accent); }
+  .hero-stat__lbl {
+    font-family: var(--font-mono);
+    font-size: var(--fs-label);
+    letter-spacing: var(--tracking-widest);
+    text-transform: uppercase;
+    color: var(--bone-500);
+  }
+
+  /* ============================================================
+     3. HERO CARD-WALL - a slow drift of iconic year-art behind
+        the headline. The stroke "MTG" reads the art THROUGH it
+        (its fill is transparent), so Magic art finally leads.
+     ============================================================ */
+  .hero { position: relative; }            /* ensure stacking context */
+  .hero > :not(.hero-cardwall) { position: relative; z-index: 1; }
+
+  .hero-cardwall {
+    position: absolute;
+    /* top-only bleed; no horizontal bleed (it would poke past the viewport on
+       WebKit mobile, whose overflow-x:clip does not contain it like Chromium). */
+    inset: calc(var(--space-xl) * -1) 0 auto 0;
+    height: clamp(280px, 46vh, 520px);
+    z-index: 0;
+    overflow: hidden;
+    pointer-events: none;
+    opacity: 0;                            /* fades in once home.js fills it */
+    transition: opacity var(--dur-glacial) var(--ease-out-quart);
+    /* fade the band into the page on every edge */
+    -webkit-mask-image:
+      linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent),
+      linear-gradient(180deg, transparent, #000 30%, #000 66%, transparent);
+    -webkit-mask-composite: source-in;
+    mask-image:
+      linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent),
+      linear-gradient(180deg, transparent, #000 30%, #000 66%, transparent);
+    mask-composite: intersect;
+  }
+  .hero-cardwall.is-ready { opacity: 0.42; }
+  .hero-cardwall__track {
+    display: flex;
+    gap: 0.5rem;
+    height: 100%;
+    width: max-content;
+    will-change: transform;
+    animation: cardwall-drift 90s linear infinite;
+  }
+  .hero-cardwall__art {
+    flex: 0 0 auto;
+    width: clamp(150px, 17vw, 230px);
+    height: 100%;
+    background-size: cover;
+    background-position: center 26%;
+    background-repeat: no-repeat;
+    border-radius: var(--r-sm);
+    filter: saturate(0.92) contrast(1.02);
+  }
+  @keyframes cardwall-drift { to { transform: translateX(-50%); } }
+
+  /* ============================================================
+     4. THE RIDGELINE - cards printed per year, 1993 -> now.
+        Static inline-SVG built in home.js; the line draws in on
+        scroll-into-view; peaks are hover/click targets.
+     ============================================================ */
+  .ridgeline-section {
+    position: relative;
+    z-index: 1;
+    margin-top: var(--space-2xl);
+  }
+  .ridge__head {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+    margin-bottom: var(--space-sm);
+  }
+  .ridge__kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6em;
+    font-family: var(--font-mono);
+    font-size: var(--fs-label);
+    letter-spacing: var(--tracking-widest);
+    text-transform: uppercase;
+    color: var(--bone-700);
+  }
+  .ridge__caption {
+    font-family: var(--font-body);
+    font-style: italic;
+    font-size: var(--fs-body-sm);
+    color: var(--bone-500);
+  }
+  .ridge-wrap { position: relative; padding-bottom: var(--space-md); }
+  .ridge {
+    display: block;
+    width: 100%;
+    height: clamp(130px, 24vh, 250px);
+    overflow: visible;
+  }
+  .ridge__baseline { stroke: var(--rule-medium); stroke-width: 1; vector-effect: non-scaling-stroke; }
+  .ridge__area { opacity: 0; transition: opacity var(--dur-glacial) var(--ease-out-quart); }
+  .ridge__line {
+    fill: none;
+    stroke: var(--bone-700);
+    stroke-width: 1.5;
+    vector-effect: non-scaling-stroke;
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    transition: stroke-dashoffset 1.9s var(--ease-out-expo);
+  }
+  .ridge-wrap.is-drawn .ridge__area { opacity: 1; }
+  .ridge-wrap.is-drawn .ridge__line { stroke-dashoffset: 0; }
+
+  /* Interactive peaks: HTML dots overlaid on the (stretched) SVG so they
+     stay round + clickable; positioned in % so they track the responsive svg. */
+  .ridge__peaks { position: absolute; inset: 0; pointer-events: none; }
+  .ridge__peak {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    width: 9px; height: 9px; padding: 0; border: 0; border-radius: 50%;
+    background: var(--era, var(--bone-700));
+    box-shadow:
+      0 0 0 2px color-mix(in oklch, var(--ink-000) 65%, transparent),
+      0 0 9px -1px var(--era, var(--bone-700));
+    cursor: pointer; pointer-events: auto;
+    opacity: 0;
+    transition: opacity var(--dur-medium), width var(--dur-fast) var(--ease-out-quart), height var(--dur-fast) var(--ease-out-quart);
+  }
+  .ridge-wrap.is-drawn .ridge__peak { opacity: 1; }
+  .ridge__peak:hover, .ridge__peak.is-active { width: 14px; height: 14px; }
+  .ridge__peak:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; opacity: 1; }
+  .ridge__axis { position: absolute; left: 0; right: 0; bottom: 0; height: 1rem; pointer-events: none; }
+  .ridge__axis-tick {
+    position: absolute;
+    transform: translateX(-50%);
+    font-family: var(--font-mono);
+    font-size: var(--fs-label-sm);
+    letter-spacing: var(--tracking-wide);
+    color: var(--bone-500);
+    white-space: nowrap;
+  }
+  /* floating tooltip */
+  .ridge__tip {
+    position: absolute;
+    z-index: 2;
+    transform: translate(-50%, -115%);
+    pointer-events: none;
+    min-width: 9rem;
+    padding: var(--space-2xs) var(--space-xs);
+    background: color-mix(in oklch, var(--ink-100) 92%, transparent);
+    border: 1px solid var(--rule-strong);
+    border-radius: var(--r-md);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    opacity: 0;
+    transition: opacity var(--dur-fast) var(--ease-out-quart);
+  }
+  .ridge__tip.is-on { opacity: 1; }
+  .ridge__tip-year {
+    font-family: var(--font-display);
+    font-weight: var(--fw-display-bold);
+    font-size: 1.4rem;
+    line-height: 1;
+    color: var(--bone-900);
+  }
+  .ridge__tip-line {
+    font-family: var(--font-mono);
+    font-size: var(--fs-label);
+    letter-spacing: var(--tracking-wide);
+    text-transform: uppercase;
+    color: var(--bone-700);
+    margin-top: 0.3rem;
+  }
+  .ridge__tip-line .v { color: var(--bone-900); font-variant-numeric: tabular-nums; }
+  .ridge__tip-line .p { color: var(--accent); }
+  @media (prefers-reduced-motion: reduce) {
+    .ridge__line { transition: none; stroke-dashoffset: 0 !important; }
+    .hero-cardwall__track { animation: none; }
+  }
+
+  /* ============================================================
+     5. ERA-BANDED YEAR GRID - eras, a spotlight year, an end-cap,
+        and per-era WUBRG tints on the otherwise-uniform wall.
+     ============================================================ */
+  /* per-era tint: every tile + divider carries --era (set inline by home.js) */
+  .year-card { --era: var(--accent); }
+
+  /* era divider - full-width chapter heading inside the grid */
+  .year-era {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-sm);
+    margin: var(--space-md) 0 calc(var(--space-2xs) * -1);
+    padding-top: var(--space-sm);
+    border-top: 1px solid var(--rule-soft);
+  }
+  .year-era:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+  .year-era__pip {
+    width: 0.62em; height: 0.62em; border-radius: 50%;
+    background: var(--era);
+    box-shadow: 0 0 0.7em -0.1em var(--era);
+    align-self: center;
+  }
+  .year-era__name {
+    font-family: var(--font-display);
+    font-weight: var(--fw-display-bold);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-wide);
+    font-size: clamp(1.05rem, 2.1vw, 1.45rem);
+    color: var(--bone-800);
+  }
+  .year-era__range {
+    font-family: var(--font-mono);
+    font-size: var(--fs-label);
+    letter-spacing: var(--tracking-wider);
+    text-transform: uppercase;
+    color: var(--bone-500);
+  }
+  .year-era__meta {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: var(--fs-label);
+    letter-spacing: var(--tracking-wide);
+    text-transform: uppercase;
+    color: var(--bone-500);
+  }
+
+  /* era tint applied to the tile's number-glow, separator, and hover edge */
+  .year-card__year {
+    text-shadow:
+      0 2px 18px oklch(0% 0 0 / 0.75),
+      0 0 38px color-mix(in oklch, var(--era) 50%, transparent);
+  }
+  .year-card__counts .sep { color: var(--era); }
+  .year-card:hover, .year-card:focus-visible { border-color: var(--era); }
+  .year-card:hover { box-shadow: 0 0 0 1px color-mix(in oklch, var(--era) 40%, transparent), 0 18px 40px -22px color-mix(in oklch, var(--era) 60%, transparent); }
+  /* lit from the Ridgeline: hovering a peak lifts that year's tile */
+  .year-card.is-spotlit {
+    transform: translateY(-3px);
+    border-color: var(--era);
+    box-shadow: 0 0 0 1px var(--era), 0 16px 36px -20px color-mix(in oklch, var(--era) 70%, transparent);
+  }
+
+  /* spotlight (newest year) - a wide feature tile */
+  @media (min-width: 640px) {
+    .year-card--feature { grid-column: span 2; min-height: clamp(300px, 38vh, 420px); }
+  }
+  .year-card--feature .year-card__year { font-size: clamp(3.5rem, 8vw, 6.5rem); }
+  .year-card--feature .year-card__flag {
+    position: absolute;
+    top: var(--space-sm);
+    right: var(--space-md);
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5em;
+    font-family: var(--font-mono);
+    font-size: var(--fs-label);
+    letter-spacing: var(--tracking-widest);
+    text-transform: uppercase;
+    color: var(--bone-900);
+    text-shadow: 0 1px 6px oklch(0% 0 0 / 0.9);
+  }
+  .year-card--feature .year-card__flag::before {
+    content: "";
+    width: 0.5em; height: 0.5em; border-radius: 50%;
+    background: var(--era);
+    box-shadow: 0 0 0.6em -0.05em var(--era);
+  }
+
+  /* end-cap - the deliberate bookend that retires the orphaned last row */
+  .year-endcap {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-xs);
+    margin-top: var(--space-md);
+    padding: var(--space-lg) var(--space-md);
+    text-align: center;
+    border: 1px solid var(--rule-medium);
+    border-radius: var(--r-md);
+    background:
+      radial-gradient(ellipse 60% 120% at 50% 0%, var(--accent-wash), transparent 70%),
+      var(--ink-050);
+  }
+  .year-endcap__spine {
+    width: min(70%, 24rem);
+    height: 3px;
+    border-radius: var(--r-pill);
+    background: var(--mtg-pie-bar);
+    opacity: 0.85;
+  }
+  .year-endcap__big {
+    font-family: var(--font-display);
+    font-weight: var(--fw-display-bold);
+    font-size: clamp(1.5rem, 4vw, 2.4rem);
+    letter-spacing: var(--tracking-tight);
+    color: var(--bone-900);
+    font-variant-numeric: tabular-nums;
+  }
+  .year-endcap__sub {
+    font-family: var(--font-mono);
+    font-size: var(--fs-label);
+    letter-spacing: var(--tracking-widest);
+    text-transform: uppercase;
+    color: var(--bone-500);
+  }
+
+  /* ============================================================
+     6. FOIL-TILT - pointer-driven 3D tilt + specular sweep on
+        rare/mythic cards (wired by year.js/search.js). The card
+        catches the light like a real foil. GPU-cheap; off under
+        reduced motion.
+     ============================================================ */
+  .foil {
+    position: relative;
+    transform: perspective(900px)
+      rotateX(var(--ry, 0deg)) rotateY(var(--rx, 0deg))
+      scale(var(--foil-scale, 1));
+    transition: transform var(--dur-medium) var(--ease-out-quart);
+    will-change: transform;
+  }
+  .foil.is-tilting { transition: transform 60ms linear; }
+  .foil__sheen {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    border-radius: var(--r-lg);
+    opacity: 0;
+    transition: opacity var(--dur-medium) var(--ease-out-quart);
+    background:
+      radial-gradient(120px 160px at var(--mx, 50%) var(--my, 50%),
+        rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.07) 38%, transparent 60%),
+      conic-gradient(from 210deg at var(--mx, 50%) var(--my, 50%),
+        color-mix(in oklch, var(--mtg-u) 55%, transparent),
+        color-mix(in oklch, var(--mtg-g) 55%, transparent),
+        color-mix(in oklch, var(--mtg-r) 55%, transparent),
+        color-mix(in oklch, var(--mtg-u) 55%, transparent));
+    mix-blend-mode: color-dodge;
+  }
+  .foil.is-tilting .foil__sheen { opacity: 0.5; }
+  @media (prefers-reduced-motion: reduce) {
+    .foil { transform: none !important; transition: none; }
+    .foil__sheen { display: none; }
+  }
+
+  /* ============================================================
+     7. YEAR-PAGE HERO ART - the readout hero finally bleeds its
+        top card (the div existed but was fed nothing). Lifted from
+        the inherited 0.18 wash so each year leads with its art.
+     ============================================================ */
+  .hero.is-readout .hero__art {
+    width: clamp(360px, 46vw, 660px);
+    height: clamp(360px, 46vw, 660px);
+    right: calc(50% - 620px);
+    -webkit-mask-image: radial-gradient(ellipse at center, black 42%, transparent 74%);
+            mask-image: radial-gradient(ellipse at center, black 42%, transparent 74%);
+  }
+  /* year pages are always bracket-3; qualify so this beats the b3 opacity rule */
+  body[data-bracket="3"] .hero.is-readout .hero__art { opacity: 0.34; }
+  @media (max-width: 820px) {
+    body[data-bracket="3"] .hero.is-readout .hero__art { right: -40px; opacity: 0.24; }
+  }
+}

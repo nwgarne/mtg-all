@@ -40,6 +40,8 @@
   <link rel="stylesheet" href="/styles/mtg-all.css" />
   <link rel="stylesheet" href="/styles/home.css" />
   <link rel="stylesheet" href="/styles/search.css" />
+  <!-- MTG-native identity + signature moments (loaded last so its overrides win). -->
+  <link rel="stylesheet" href="/styles/signature.css" />
 
   <script src="/scripts/home.js" defer></script>
   <script src="/scripts/search.js" defer></script>
@@ -65,6 +67,7 @@
 
   <main class="wrap wide" id="main" tabindex="-1">
     <section class="hero">
+      <div class="hero-cardwall" id="hero-cardwall" aria-hidden="true"></div>
       <div class="hero__kicker reveal d1"><span>Every Magic card, by release year</span></div>
       <h1 class="hero__title hero__title--mega reveal d1">
         <span class="hero__title-stroke">MTG</span>
@@ -73,10 +76,15 @@
       <p class="hero__tagline reveal d2" id="hero-tagline" data-fallback="Every Magic: the Gathering card, grouped by the year it released.">
         Every Magic: the Gathering card, grouped by the year it released.
       </p>
+      <div class="hero-stats reveal d3" id="hero-stats"></div>
+      <div class="mtg-spine reveal d3" aria-hidden="true"></div>
     </section>
 
+    <!-- The Ridgeline: history-of-Magic data-viz, filled by home.js. -->
+    <section class="ridgeline-section" id="ridgeline" aria-label="The shape of Magic: cards printed per year"></section>
+
     <section class="section">
-      <span class="section__num">// The archive</span>
+      <span class="section__num"><span class="mtg-pips" aria-hidden="true"><i class="pip pip--w"></i><i class="pip pip--u"></i><i class="pip pip--b"></i><i class="pip pip--r"></i><i class="pip pip--g"></i></span> The archive</span>
       <h2 class="section__title">Every year.</h2>
       <div class="year-grid" id="year-grid">
         <p class="year-grid__status">Loading years…</p>

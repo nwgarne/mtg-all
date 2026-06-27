@@ -190,15 +190,46 @@
     img.setAttribute('alt', alt || '');
     return img;
   }
+  // Foil-tilt: the zoomed card catches the light on pointer-move, the iconic
+  // "foil in the light" feel. Off entirely under reduced motion.
+  var _reduceMotion = (typeof window !== 'undefined' && window.matchMedia)
+    ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+  function attachFoil(foil) {
+    if (_reduceMotion && _reduceMotion.matches) return;
+    var MAXT = 9;
+    foil.addEventListener('pointermove', function (e) {
+      var r = foil.getBoundingClientRect();
+      if (!r.width || !r.height) return;
+      var px = (e.clientX - r.left) / r.width;
+      var py = (e.clientY - r.top) / r.height;
+      foil.style.setProperty('--rx', ((px - 0.5) * 2 * MAXT).toFixed(2) + 'deg');
+      foil.style.setProperty('--ry', ((0.5 - py) * 2 * MAXT).toFixed(2) + 'deg');
+      foil.style.setProperty('--mx', (px * 100).toFixed(1) + '%');
+      foil.style.setProperty('--my', (py * 100).toFixed(1) + '%');
+      foil.classList.add('is-tilting');
+    });
+    foil.addEventListener('pointerleave', function () {
+      foil.classList.remove('is-tilting');
+      foil.style.setProperty('--rx', '0deg');
+      foil.style.setProperty('--ry', '0deg');
+    });
+  }
+  function foilWrap(img) {
+    var f = el('div', 'foil');
+    f.appendChild(img);
+    f.appendChild(el('div', 'foil__sheen'));
+    attachFoil(f);
+    return f;
+  }
   // front = the `big` image; back = the optional `b2` image.
   function openLightbox(front, back, name, opener) {
     if (!front && !back) return;
     var lb = ensureLightbox();
     var inner = lb.querySelector('.card-lightbox__inner');
     inner.textContent = '';
-    if (front) inner.appendChild(lightboxImg(front, name ? name + ' (front)' : ''));
+    if (front) inner.appendChild(foilWrap(lightboxImg(front, name ? name + ' (front)' : '')));
     if (back) {
-      inner.appendChild(lightboxImg(back, name ? name + ' (back)' : ''));
+      inner.appendChild(foilWrap(lightboxImg(back, name ? name + ' (back)' : '')));
       lb.classList.add('is-dfc');
     } else {
       lb.classList.remove('is-dfc');
@@ -1246,12 +1277,14 @@
   }
 
   // --- Hero (year + stat row), shared by both views ---
-  function buildHero(year, totalCards, numCats, totalValue) {
+  function buildHero(year, totalCards, numCats, totalValue, heroArt) {
     var hero = el('section', 'hero is-readout');
     hero.setAttribute('aria-label', 'Year overview');
 
     var art = el('div', 'hero__art');
     art.setAttribute('aria-hidden', 'true');
+    // Finally feed the hero art: the year bleeds its top card behind the headline.
+    if (heroArt) { art.style.backgroundImage = "url('" + String(heroArt).replace(/["'\\]/g, '') + "')"; }
     hero.appendChild(art);
 
     var kicker = el('div', 'hero__kicker');
@@ -1951,7 +1984,7 @@
     var heroSet = sets.length ? sets[0] : null;
 
     // Build the shared hero ONCE and reuse the same node across views.
-    var hero = buildHero(year, totalCards, sets.length, totalValue);
+    var hero = buildHero(year, totalCards, sets.length, totalValue, heroSet ? heroSet.art : '');
 
     var ctx = {
       year: year,

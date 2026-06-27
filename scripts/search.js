@@ -186,13 +186,42 @@
     img.setAttribute('alt', alt || '');
     return img;
   }
+  // Foil-tilt on the zoomed printing (matches year.js). Off under reduced motion.
+  var _reduceMotion = (typeof window !== 'undefined' && window.matchMedia)
+    ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+  function attachFoil(foil) {
+    if (_reduceMotion && _reduceMotion.matches) return;
+    var MAXT = 9;
+    foil.addEventListener('pointermove', function (e) {
+      var r = foil.getBoundingClientRect();
+      if (!r.width || !r.height) return;
+      var px = (e.clientX - r.left) / r.width, py = (e.clientY - r.top) / r.height;
+      foil.style.setProperty('--rx', ((px - 0.5) * 2 * MAXT).toFixed(2) + 'deg');
+      foil.style.setProperty('--ry', ((0.5 - py) * 2 * MAXT).toFixed(2) + 'deg');
+      foil.style.setProperty('--mx', (px * 100).toFixed(1) + '%');
+      foil.style.setProperty('--my', (py * 100).toFixed(1) + '%');
+      foil.classList.add('is-tilting');
+    });
+    foil.addEventListener('pointerleave', function () {
+      foil.classList.remove('is-tilting');
+      foil.style.setProperty('--rx', '0deg');
+      foil.style.setProperty('--ry', '0deg');
+    });
+  }
+  function foilWrap(img) {
+    var f = el('div', 'foil');
+    f.appendChild(img);
+    f.appendChild(el('div', 'foil__sheen'));
+    attachFoil(f);
+    return f;
+  }
   function openLightbox(front, back, name, opener) {
     if (!front && !back) return;
     var lb = ensureLightbox();
     var inner = lb.querySelector('.card-lightbox__inner');
     inner.textContent = '';
-    if (front) inner.appendChild(lbImg(front, name ? name + ' (front)' : ''));
-    if (back) { inner.appendChild(lbImg(back, name ? name + ' (back)' : '')); lb.classList.add('is-dfc'); }
+    if (front) inner.appendChild(foilWrap(lbImg(front, name ? name + ' (front)' : '')));
+    if (back) { inner.appendChild(foilWrap(lbImg(back, name ? name + ' (back)' : ''))); lb.classList.add('is-dfc'); }
     else lb.classList.remove('is-dfc');
     lb.classList.add('is-open');
     lb.setAttribute('aria-hidden', 'false');

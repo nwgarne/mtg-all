@@ -128,6 +128,29 @@
 
 
     /* ============================================================
+       THE COLOR PIE  (WUBRG)  -- MTG brand spine
+       ------------------------------------------------------------
+       The five mana colors in OKLCH, held in-key with the warm
+       neutrals (chroma pulled back so they read as a refined spine,
+       not a candy rainbow). Green REUSES the mako ramp and red the
+       rust ramp -- both were dead weight in this product before.
+       White / blue / black are new. Gold stays the chrome / value /
+       CTA accent; WUBRG carries the brand soul (hero spine, section
+       pips, per-era year tints, type-pill identity).
+       ============================================================ */
+    --mtg-w: oklch(91% 0.050 92);    /* warm ivory  - White */
+    --mtg-u: oklch(67% 0.130 245);   /* azure       - Blue  */
+    --mtg-b: oklch(62% 0.095 305);   /* smoked iris - Black (kept legible on ink) */
+    --mtg-r: var(--rust-500);        /* red-orange  - Red   */
+    --mtg-g: var(--mako-500);        /* green       - Green */
+
+    /* Five hard-edged bands a single element can wear as the brand spine. */
+    --mtg-pie-bar: linear-gradient(90deg,
+      var(--mtg-w) 0 20%, var(--mtg-u) 20% 40%, var(--mtg-b) 40% 60%,
+      var(--mtg-r) 60% 80%, var(--mtg-g) 80% 100%);
+
+
+    /* ============================================================
        4. TYPOGRAPHY
        ------------------------------------------------------------
        Fonts:
