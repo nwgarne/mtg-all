@@ -20,7 +20,7 @@ import { join } from 'node:path';
 for (const profile of ['phone', 'desktop']) {
   const { browser, page } = await open(profile);
   try {
-    await goto(page, '/2024/#all', 2500); // first category (Legendary Creatures, 1,700) auto-opens
+    await goto(page, '/2024/#all', 3600); // cards.json lazy-loads on scope entry; first category (Legendary Creatures, 1,700) auto-opens
     await killSmoothScroll(page);
 
     // (1) implied row height = full document height / total rows.

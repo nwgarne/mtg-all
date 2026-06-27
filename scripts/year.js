@@ -265,6 +265,13 @@
       imgEl.setAttribute('loading', 'lazy');
       imgEl.setAttribute('decoding', 'async');
       imgEl.setAttribute('src', c.img);
+      // Sharper dense grids: let the browser pull the 488px 'normal' for larger /
+      // hi-DPI tiles instead of upscaling the 146px 'small'. src stays the small
+      // fallback for browsers without srcset.
+      if (c.big && c.big !== c.img) {
+        imgEl.setAttribute('srcset', c.img + ' 146w, ' + c.big + ' 488w');
+        imgEl.setAttribute('sizes', '(max-width: 640px) 46vw, (max-width: 1280px) 30vw, 240px');
+      }
       imgEl.setAttribute('alt', name);
       imgWrap.appendChild(imgEl);
     }
@@ -1874,7 +1881,26 @@
     return { kind: 'picker' };
   }
 
+  // Lazy-load the heavy per-card payload. The page boots from the small index
+  // (<year>.json: hero + set picker), and only the first scope/all view pulls
+  // <year>.cards.json. Cached on ctx so later scope switches are instant.
+  function ensureCards(ctx) {
+    if (ctx.baseCats) return Promise.resolve(ctx.baseCats);
+    if (ctx._cardsPromise) return ctx._cardsPromise;
+    ctx._cardsPromise = fetch('/data/' + ctx.year + '.cards.json', { credentials: 'same-origin' })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function (d) {
+        ctx.baseCats = (d && Array.isArray(d.categories)) ? d.categories : [];
+        return ctx.baseCats;
+      });
+    return ctx._cardsPromise;
+  }
+  function cardsLoadingNote() { return el('p', 'year-grid__loading', 'Loading cards…'); }
+
   function showView(ctx, host) {
+    // Every navigation bumps the token so a card fetch in flight from a prior
+    // view can't paint over a newer one when it resolves.
+    var token = (ctx._navToken = (ctx._navToken || 0) + 1);
     var route = resolveScope(ctx, readHash());
     if (route.kind === 'picker') {
       // Tear down any scope-view chrome.
@@ -1889,28 +1915,50 @@
       host.appendChild(renderPicker(ctx));
       // Reset scroll to the top so the picker starts at the hero.
       try { window.scrollTo(0, 0); } catch (e) {}
-    } else {
-      // Scope view. Reset the open category whenever the scope changes so the
-      // new scope auto-opens its first category (Item 3).
-      if (ctx.lastScope !== route.scope) {
-        openName = null;
-        // Item 7: a rarity filter carried from the previous scope silently
-        // shrinks a freshly opened set (e.g. land on "Mythic" with most cards
-        // hidden). Reset rarity to "All" on a SCOPE change so each set/All-cards
-        // view starts unfiltered; the Sort + Group choice still carry over.
-        ctx.lastRarity = 'all';
-        ctx.lastScope = route.scope;
-      }
-      var state = {
-        scope: route.scope,
-        sort: ctx.lastSort || 'name',
-        rarity: ctx.lastRarity || 'all',
-        group: ctx.lastGroup || 'type'
-      };
-      renderScope(ctx, host, state);
-      // Land at the top of the new scope view.
-      try { window.scrollTo(0, 0); } catch (e) {}
+      return;
     }
+    // Scope view. Reset the open category whenever the scope changes so the
+    // new scope auto-opens its first category (Item 3).
+    if (ctx.lastScope !== route.scope) {
+      openName = null;
+      // Item 7: a rarity filter carried from the previous scope silently
+      // shrinks a freshly opened set (e.g. land on "Mythic" with most cards
+      // hidden). Reset rarity to "All" on a SCOPE change so each set/All-cards
+      // view starts unfiltered; the Sort + Group choice still carry over.
+      ctx.lastRarity = 'all';
+      ctx.lastScope = route.scope;
+    }
+    var state = {
+      scope: route.scope,
+      sort: ctx.lastSort || 'name',
+      rarity: ctx.lastRarity || 'all',
+      group: ctx.lastGroup || 'type'
+    };
+    if (ctx.baseCats) {
+      renderScope(ctx, host, state);
+      try { window.scrollTo(0, 0); } catch (e) {}
+      return;
+    }
+    // Cards not loaded yet (first scope/all view): paint the hero + a loading
+    // note, fetch the payload once, then render the scope.
+    unwatchToolbar(); hideBackToTop(); unmountLiveRegion();
+    cancelChunkedRender(); teardownVirtual();
+    openName = null;
+    host.innerHTML = '';
+    host.appendChild(ctx.hero);
+    host.appendChild(cardsLoadingNote());
+    try { window.scrollTo(0, 0); } catch (e) {}
+    ensureCards(ctx).then(function () {
+      if (ctx._navToken !== token) return;   // superseded by a newer navigation
+      renderScope(ctx, host, state);
+      try { window.scrollTo(0, 0); } catch (e) {}
+    }).catch(function (err) {
+      if (ctx._navToken !== token) return;
+      console.error('year: failed to load cards', err);
+      host.innerHTML = '';
+      host.appendChild(ctx.hero);
+      host.appendChild(el('p', 'year-grid__loading', 'Could not load cards. Please reload.'));
+    });
   }
 
   // --- Empty / error state ---
@@ -1938,24 +1986,14 @@
 
   // --- Render (builds the shared context, then routes to a view) ---
   function render(host, year, data) {
-    var categories = (data && Array.isArray(data.categories)) ? data.categories : [];
-    if (!categories.length) { renderEmpty(host, year); return; }
-
-    // Totals: total cards (trust data.totalCards, else sum counts) and the
-    // year's nonfoil market value (sum each card's `p`).
-    var totalValue = 0;
-    var summedCount = 0;
-    for (var i = 0; i < categories.length; i++) {
-      var cards = categories[i].cards || [];
-      summedCount += (categories[i].count != null) ? categories[i].count : cards.length;
-      for (var j = 0; j < cards.length; j++) {
-        var v = parseFloat(cards[j].p);
-        if (isFinite(v)) totalValue += v;
-      }
-    }
-    var totalCards = (data.totalCards != null) ? data.totalCards : summedCount;
-
+    // `data` is the small per-year INDEX: { year, totalCards, totalValue, sets }.
+    // The heavy per-card payload lives in <year>.cards.json and is fetched
+    // lazily by ensureCards() only when a scope/all view actually opens, so the
+    // hero + set picker paint instantly even on the heaviest years.
     var sets = (data && Array.isArray(data.sets)) ? data.sets : [];
+    var totalCards = (data && data.totalCards != null) ? data.totalCards : 0;
+    if (!totalCards && !sets.length) { renderEmpty(host, year); return; }
+    var totalValue = (data && data.totalValue != null) ? data.totalValue : 0;
 
     // Per-set lookups used by the toolbar label + scope routing.
     var setByCode = {};       // upperCode -> set object
@@ -1988,7 +2026,7 @@
 
     var ctx = {
       year: year,
-      baseCats: categories,
+      baseCats: null,   // lazy; populated by ensureCards() on the first scope view
       sets: sets,
       totalCards: totalCards,
       hero: hero,

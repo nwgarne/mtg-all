@@ -130,9 +130,15 @@ for year in sorted(by_year):
             used_top.add(top_c)
         sets_list.append({"code": k, "name": v["name"], "count": v["count"], "art": art_c,
                           "top": top_c, "value": round(max(val_c, 0.0), 2)})
+    # Small INDEX (hero + set picker render from this instantly): no card arrays,
+    # so the year page paints immediately even on the heaviest years.
     with open(f"{OUT}/{year}.json", "w") as fo:
-        json.dump({"year": year, "totalCards": total, "sets": sets_list, "categories": cat_blocks},
+        json.dump({"year": year, "totalCards": total,
+                   "totalValue": round(year_value[year], 2), "sets": sets_list},
                   fo, separators=(",", ":"))
+    # Heavy per-card payload, fetched lazily by year.js only when a card view opens.
+    with open(f"{OUT}/{year}.cards.json", "w") as fo:
+        json.dump({"year": year, "categories": cat_blocks}, fo, separators=(",", ":"))
     t = year_title.get(year, (0, None))[1]
     years_index.append({"year": year, "sets": len(year_sets[year]), "cards": total,
                         "value": round(year_value[year], 2), "title": t})

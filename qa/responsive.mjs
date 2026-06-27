@@ -41,7 +41,7 @@ for (const profile of ['phone', 'desktop', 'wide']) {
     check(`[${profile}] picker: no horizontal overflow`, !of.overflowing, JSON.stringify(of));
 
     // --- All-cards accordion (windowed) ---
-    await goto(page, '/2024/#all', 2300);
+    await goto(page, '/2024/#all', 3600); // cards.json is now lazy-loaded on scope entry; allow the fetch+parse
     of = await horizOverflow(page);
     check(`[${profile}] #all: no horizontal overflow`, !of.overflowing, JSON.stringify(of));
 

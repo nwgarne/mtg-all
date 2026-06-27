@@ -261,6 +261,11 @@
       im.setAttribute('loading', 'lazy');
       im.setAttribute('decoding', 'async');
       im.setAttribute('src', c.img);
+      // Sharper printing tiles on hi-DPI / desktop (488px 'normal' vs 146px 'small').
+      if (c.big && c.big !== c.img) {
+        im.setAttribute('srcset', c.img + ' 146w, ' + c.big + ' 488w');
+        im.setAttribute('sizes', '(max-width: 640px) 46vw, 220px');
+      }
       im.setAttribute('alt', c.n + ' (' + (c.setName || c.s) + ')');
       imgWrap.appendChild(im);
     }
