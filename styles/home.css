@@ -35,23 +35,30 @@
      base and the year pages (which do not use .hero) are untouched.
      ============================================================ */
   .hero.is-home {
-    padding: var(--space-lg) 0 var(--space-md);
+    padding: var(--space-sm) 0 var(--space-sm);
   }
   .hero.is-home .hero__foiltilt {
-    width: clamp(200px, 28vw, 330px);
-    margin-bottom: var(--space-sm);
+    width: clamp(180px, 22vw, 260px);
+    margin-bottom: var(--space-xs);
   }
   .hero.is-home .hero__kicker {
-    margin-bottom: var(--space-sm);
+    margin-bottom: var(--space-xs);
   }
   .hero.is-home .hero__title--mega {
-    font-size: var(--fs-hero);
-    margin-bottom: var(--space-sm);
+    font-size: clamp(2.25rem, 5.5vw, 5rem);
+    margin-bottom: var(--space-xs);
   }
-  /* Pull the first section (the ridgeline data-viz) up under the
-     compact hero; the default 96px section break is too much air here. */
-  .hero.is-home + section {
-    padding-top: var(--space-xl);
+  /* The figures + spine each ride a space-lg (36px) margin; halve it. */
+  .hero.is-home .hero-stats {
+    margin-top: var(--space-sm);
+  }
+  .hero.is-home .mtg-spine {
+    margin-top: var(--space-sm);
+  }
+  /* Pull the ridgeline up under the compact hero. It sits on a space-2xl
+     (72px) margin-top, not padding, so override the MARGIN. */
+  .hero.is-home + .ridgeline-section {
+    margin-top: var(--space-md);
   }
 
 
