@@ -25,6 +25,37 @@
 
 
   /* ============================================================
+     HERO - homepage compaction
+     ------------------------------------------------------------
+     The shared .hero breathes generously (72px top pad, fs-mega
+     title, 420px wordmark), which pushed the ridgeline + archive
+     below the fold on desktop. Compact the HOMEPAGE hero so the
+     content sits higher, mirroring the decks.foiltilt.com landing
+     compaction (e5cf0a8). Scoped to .hero.is-home; the shared hero
+     base and the year pages (which do not use .hero) are untouched.
+     ============================================================ */
+  .hero.is-home {
+    padding: var(--space-lg) 0 var(--space-md);
+  }
+  .hero.is-home .hero__foiltilt {
+    width: clamp(200px, 28vw, 330px);
+    margin-bottom: var(--space-sm);
+  }
+  .hero.is-home .hero__kicker {
+    margin-bottom: var(--space-sm);
+  }
+  .hero.is-home .hero__title--mega {
+    font-size: var(--fs-hero);
+    margin-bottom: var(--space-sm);
+  }
+  /* Pull the first section (the ridgeline data-viz) up under the
+     compact hero; the default 96px section break is too much air here. */
+  .hero.is-home + section {
+    padding-top: var(--space-xl);
+  }
+
+
+  /* ============================================================
      YEAR GRID - responsive grid of year cards, newest first.
      auto-fill so it reflows from 1 column on phones up to 3-4
      on wide screens, all tiles the same size.
