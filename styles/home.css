@@ -38,41 +38,42 @@
     padding: var(--space-sm) 0 var(--space-sm);
   }
   .hero.is-home .hero__foiltilt {
-    width: clamp(160px, 18vw, 220px);
+    width: clamp(150px, 16vw, 200px);
     margin-bottom: var(--space-2xs);
   }
   .hero.is-home .hero__kicker {
     margin-bottom: var(--space-2xs);
   }
   .hero.is-home .hero__title--mega {
-    font-size: clamp(2rem, 4.5vw, 4rem);
+    font-size: clamp(1.875rem, 4vw, 3.5rem);
     margin-bottom: var(--space-2xs);
   }
   /* The figures + spine each ride a space-lg (36px) margin; cut it hard. */
   .hero.is-home .hero-stats {
-    margin-top: var(--space-sm);
+    margin-top: var(--space-xs);
   }
   .hero.is-home .mtg-spine {
     margin-top: var(--space-xs);
   }
 
-  /* --- Bring the year grid toward the fold on desktop ---
+  /* --- Year grid peeks into the fold on desktop ---
      The ridgeline + archive sections each carried the base 96px section
-     padding plus large margins, burying the year grid ~300px below the fold.
-     Tighten both homepage section breaks and trim the ridgeline chart so the
-     browser sits near the fold. The ridgeline only renders on the homepage. */
+     padding plus large margins, burying the year grid below the fold. Tighten
+     both homepage section breaks and trim the ridgeline chart so the first row
+     of year cards clears the fold. The ridgeline only renders on the homepage
+     so the chart override is naturally scoped. */
   .hero.is-home + .ridgeline-section {
     margin-top: var(--space-sm);
-    padding-top: var(--space-md);
+    padding-top: var(--space-sm);
   }
   .ridgeline-section .ridge {
-    height: clamp(110px, 15vh, 150px);
+    height: clamp(96px, 11vh, 120px);
   }
   .hero.is-home ~ .section {
-    padding-top: var(--space-md);
+    padding-top: var(--space-sm);
   }
   .hero.is-home ~ .section .year-grid {
-    margin-top: var(--space-sm);
+    margin-top: var(--space-xs);
   }
 
 
